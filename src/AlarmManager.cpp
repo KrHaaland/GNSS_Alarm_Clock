@@ -69,12 +69,15 @@ void alarm_task() {
       const AlarmConfig &a = settings().alarms[i];
       if (!a.enabled)
         continue;
-      if (hour != a.hour || min != a.minute || !((a.daysMask >> wday) & 1))
+      uint8_t mask = a.daysMask ? a.daysMask : 0x7F; // no days selected = daily
+      if (hour != a.hour || min != a.minute || !((mask >> wday) & 1))
         continue;
       if (s_lastFiredMinute[i] == curMinute)
         continue;
       s_lastFiredMinute[i] = curMinute; // guard regardless of state
-      if (s_state == AlarmState::Idle)
+      // Ring when idle, or take over a snooze (a different alarm is now due —
+      // don't let it be silently swallowed while another is snoozing).
+      if (s_state == AlarmState::Idle || s_state == AlarmState::Snoozed)
         start_ringing((int8_t)i, false);
     }
 
@@ -128,11 +131,12 @@ bool alarm_next_occurrence(time_t localNow, time_t &nextLocal, int8_t &index) {
 
   for (uint8_t i = 0; i < NUM_ALARMS; i++) {
     const AlarmConfig &a = settings().alarms[i];
-    if (!a.enabled || a.daysMask == 0)
+    if (!a.enabled)
       continue;
+    uint8_t mask = a.daysMask ? a.daysMask : 0x7F; // no days selected = daily
     for (uint8_t d = 0; d < 8; d++) {
       uint8_t w = (uint8_t)((wday + d) % 7);
-      if (!((a.daysMask >> w) & 1))
+      if (!((mask >> w) & 1))
         continue;
       time_t t =
           midnight + (time_t)d * 86400 + (time_t)a.hour * 3600 + a.minute * 60;

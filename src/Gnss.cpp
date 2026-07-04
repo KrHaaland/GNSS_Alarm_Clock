@@ -31,8 +31,16 @@ void gnss_task() {
   // Require date.isUpdated() too so we only anchor on RMC commits (date and
   // time from the same sentence); a GGA just after midnight would otherwise
   // pair the new time with the previous day's date.
+  //
+  // CRITICAL: require an actual position fix. TinyGPS++ commits date/time for
+  // any checksum-valid RMC even with status 'V' (no fix). On a cold start the
+  // L86 emits its free-running clock with the GPS-epoch date, which TinyGPS++
+  // maps to year 2080 (passes >= 2024). Without the fix gate that garbage
+  // would be adopted and written into the supercap-backed RTC, persisting
+  // across reboots. Only trust GNSS time when we truly have a fix.
   if (gps.time.isUpdated() && gps.date.isUpdated() && gps.time.isValid() &&
-      gps.date.isValid() && gps.date.year() >= 2024) {
+      gps.date.isValid() && gps.date.year() >= 2024 && gps.date.year() < 2100 &&
+      gnss_has_fix()) {
     time_t t =
         tm_to_epoch(gps.date.year(), gps.date.month(), gps.date.day(),
                     gps.time.hour(), gps.time.minute(), gps.time.second());
