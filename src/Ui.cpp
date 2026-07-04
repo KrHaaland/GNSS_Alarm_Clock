@@ -57,13 +57,14 @@ static lv_obj_t *s_msgbox;
 static lv_obj_t *s_scr[8]; // indexed by UiScreen
 
 // Clock
-static lv_obj_t *s_ckStatL, *s_ckStatM, *s_ckStatR;
+static lv_obj_t *s_ckStatL, *s_ckStatR;
 static lv_obj_t *s_ckBig, *s_ckSec, *s_ckAmpm, *s_ckBottom;
-static char s_cStatL[24], s_cStatM[24], s_cStatR[24];
+static char s_cStatL[24], s_cStatR[24];
 static char s_cBig[12], s_cSec[8], s_cAmpm[4], s_cBottom[72];
 
 // Menu
-static lv_obj_t *s_fMenu[7];
+static lv_obj_t *s_fMenu[8];
+static lv_obj_t *s_tapLabel; // "Tap snooze: On/Off" toggle item label
 
 // AlarmEdit
 static int8_t s_alarmIdx;
@@ -247,6 +248,17 @@ static void slider_step(lv_obj_t *s, int step) {
   }
 }
 
+// Step a roller directly (±1). More reliable than pushing LV_KEY through the
+// indev, and lv_roller_set_selected also commits the value (updates the
+// shadow the roller would otherwise revert to on defocus).
+static void roller_step(lv_obj_t *r, int delta) {
+  int32_t cnt = (int32_t)lv_roller_get_option_count(r);
+  int32_t v = (int32_t)lv_roller_get_selected(r) + delta;
+  if (v < 0) v = 0;
+  if (v >= cnt) v = cnt - 1;
+  lv_roller_set_selected(r, (uint32_t)v, LV_ANIM_ON);
+}
+
 static void blacken(lv_obj_t *o); // true-black bg; defined near ui_begin
 
 static void show_msgbox(const char *title, const char *txt) {
@@ -362,14 +374,8 @@ static void refresh_clock(bool force) {
     snprintf(b, sizeof(b), LV_SYMBOL_GPS " --");
   set_label_if(s_ckStatL, s_cStatL, sizeof(s_cStatL), b, force);
 
-  const char *src = "--";
-  if (clock_source() == TimeSource::Gnss)
-    src = "GNSS";
-  else if (clock_source() == TimeSource::Rtc)
-    src = "RTC";
-  snprintf(b, sizeof(b), "%s%s", src,
-           (clock_valid() && clock_is_dst()) ? " DST" : "");
-  set_label_if(s_ckStatM, s_cStatM, sizeof(s_cStatM), b, force);
+  // (time source + DST indicator removed from the clock face; still shown on
+  //  the System info screen.)
 
   b[0] = '\0';
   if (storage_busy())
@@ -441,10 +447,6 @@ static void make_clock() {
   lv_obj_set_style_text_font(s_ckStatL, &lv_font_montserrat_12, 0);
   lv_obj_align(s_ckStatL, LV_ALIGN_TOP_LEFT, 2, 0);
 
-  s_ckStatM = lv_label_create(scr);
-  lv_obj_set_style_text_font(s_ckStatM, &lv_font_montserrat_12, 0);
-  lv_obj_align(s_ckStatM, LV_ALIGN_TOP_MID, 0, 0);
-
   s_ckStatR = lv_label_create(scr);
   lv_obj_set_style_text_font(s_ckStatR, &lv_font_montserrat_12, 0);
   lv_obj_align(s_ckStatR, LV_ALIGN_TOP_RIGHT, -2, 0);
@@ -463,7 +465,7 @@ static void make_clock() {
   lv_obj_set_style_text_font(s_ckBottom, &lv_font_montserrat_12, 0);
   lv_obj_align(s_ckBottom, LV_ALIGN_BOTTOM_MID, 0, 0);
 
-  s_cStatL[0] = s_cStatM[0] = s_cStatR[0] = '\0';
+  s_cStatL[0] = s_cStatR[0] = '\0';
   s_cBig[0] = s_cSec[0] = s_cAmpm[0] = s_cBottom[0] = '\0';
   refresh_clock(true);
 }
@@ -471,8 +473,14 @@ static void make_clock() {
 // ------------------------------------------------------------- Menu scr ---
 enum : uint8_t {
   MENU_ALARM1, MENU_ALARM2, MENU_TZ, MENU_DISPLAY, MENU_TUNES, MENU_SYSINFO,
-  MENU_BACK
+  MENU_TAPSNOOZE, MENU_BACK
 };
+
+static void menu_refresh_tapsnooze() {
+  if (s_tapLabel)
+    lv_label_set_text_fmt(s_tapLabel, "Tap snooze: %s",
+                          settings().tapSnooze ? "On" : "Off");
+}
 
 static void menu_btn_cb(lv_event_t *e) {
   uint8_t id = (uint8_t)(uintptr_t)lv_event_get_user_data(e);
@@ -483,6 +491,11 @@ static void menu_btn_cb(lv_event_t *e) {
   case MENU_DISPLAY: load_screen(SCR_DISP); break;
   case MENU_TUNES:   load_screen(SCR_TUNES); break;
   case MENU_SYSINFO: load_screen(SCR_SYS); break;
+  case MENU_TAPSNOOZE: // toggle in place, stay in the menu
+    settings().tapSnooze = !settings().tapSnooze;
+    settings_save();
+    menu_refresh_tapsnooze();
+    break;
   default:           load_screen(SCR_CLOCK); break;
   }
 }
@@ -507,11 +520,15 @@ static void make_menu() {
   lv_obj_set_style_pad_all(list, 0, 0);
   lv_obj_set_style_border_width(list, 0, 0);
 
-  static const char *const NAMES[7] = {"Alarm 1",  "Alarm 2", "Time & zone",
-                                       "Display",  "Tunes",   "System info",
-                                       "Back"};
-  for (uint8_t i = 0; i < 7; i++)
+  static const char *const NAMES[8] = {"Alarm 1",  "Alarm 2",    "Time & zone",
+                                       "Display",  "Tunes",      "System info",
+                                       "Tap snooze", "Back"};
+  for (uint8_t i = 0; i < 8; i++)
     s_fMenu[i] = list_add_item(list, NULL, NAMES[i], menu_btn_cb, i);
+
+  // The tap-snooze item shows its state inline; grab its label and set it.
+  s_tapLabel = lv_obj_get_child(s_fMenu[MENU_TAPSNOOZE], 0);
+  menu_refresh_tapsnooze();
 }
 
 // -------------------------------------------------------- AlarmEdit scr ---
@@ -945,7 +962,7 @@ static void load_screen(UiScreen id) {
 
   switch (id) {
   case SCR_CLOCK: refresh_clock(true); group_set(NULL, 0); break;
-  case SCR_MENU:  group_set(s_fMenu, 7); break;
+  case SCR_MENU:  menu_refresh_tapsnooze(); group_set(s_fMenu, 8); break;
   case SCR_ALARM: alarm_sync_widgets(); group_set(s_fAlarm, 7); break;
   case SCR_TZ:    tz_sync_widgets(); group_set(s_fTz, 4); break;
   case SCR_DISP:  disp_sync_widgets(); group_set(s_fDisp, 3); break;
@@ -995,15 +1012,19 @@ static void handle_edit_key(const ButtonEvent &ev) {
   bool roller = lv_obj_check_type(f, &lv_roller_class);
 
   switch (ev.id) {
-  case BtnId::B2: // up / increase
-    if (slider)
-      slider_step(f, +10);
-    else
-      push_key(LV_KEY_LEFT); // roller/dropdown: previous, btnmatrix: left
-    break;
-  case BtnId::B3: // down / decrease
+  case BtnId::B2: // decrease / previous
     if (slider)
       slider_step(f, -10);
+    else if (roller)
+      roller_step(f, -1);
+    else
+      push_key(LV_KEY_LEFT); // dropdown list / btnmatrix: move left
+    break;
+  case BtnId::B3: // increase / next
+    if (slider)
+      slider_step(f, +10);
+    else if (roller)
+      roller_step(f, +1);
     else
       push_key(LV_KEY_RIGHT);
     break;

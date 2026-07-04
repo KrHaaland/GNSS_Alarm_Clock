@@ -2,8 +2,12 @@
 #include "AccelLIS3DH.h"
 #include "pins.h"
 #include <Adafruit_LIS3DH.h>
+#include <Wire.h>
 
-#define CLICK_THRESHOLD 40
+// Double-tap: a deliberate two-hit gesture that the speaker's continuous
+// on-board vibration won't reproduce (unlike a single tap). Threshold is a
+// first-pass value; tune on hardware if taps are hard/too easy to register.
+#define CLICK_THRESHOLD 32
 #define POLL_INTERVAL_MS 20
 
 static Adafruit_LIS3DH lis;
@@ -17,7 +21,14 @@ bool accel_begin() {
     return false;
   lis.setRange(LIS3DH_RANGE_4_G);
   lis.setDataRate(LIS3DH_DATARATE_400_HZ); // click detect wants a high ODR
-  lis.setClick(1, CLICK_THRESHOLD, 10, 20, 255); // single click
+  lis.setClick(2, CLICK_THRESHOLD, 10, 20, 255); // 2 = double click
+  // Enable the high-pass filter on the CLICK path (CTRL_REG2). Without it the
+  // static ~1 g on Z sits at the click threshold and the detector fires
+  // continuously (observed src=0x64 every poll). HPM=normal(10) | HPCLICK(bit2).
+  Wire.beginTransmission(I2C_ADDR_ACCEL);
+  Wire.write(0x21); // CTRL_REG2
+  Wire.write(0x84);
+  Wire.endTransmission();
   return true;
 }
 
@@ -29,8 +40,8 @@ void accel_task() {
     return; // throttle CLICK_SRC reads to spare the I2C bus
   lastPollMs = now;
   uint8_t src = lis.getClick();
-  // CLICK_SRC: 0x10 = single click, 0x20 = double
-  if ((src & 0x30) != 0)
+  // CLICK_SRC bit 0x20 = double-click detected (0x10 = single, ignored)
+  if (src & 0x20)
     tappedFlag = true;
 }
 

@@ -31,11 +31,20 @@
 #include "Ui.h"
 
 static bool s_escalated = false;
+static uint32_t s_ringStartMs = 0;   // when the current ring/re-ring began
+#define TAP_ARM_MS 2000u             // ignore taps for the first 2 s of a ring
 
 // ---- Alarm ring/silence orchestration -------------------------------------
 
 static void start_ringing(int8_t idx, bool escalated) {
   const AlarmConfig &a = settings().alarms[idx];
+
+  // Discard any stale accelerometer tap. The tap flag is set on any handling
+  // of the clock but only consumed while ringing, so without this a bump from
+  // minutes ago would instantly snooze the alarm the moment it fires.
+  accel_tapped();
+  if (!escalated)
+    s_ringStartMs = millis(); // arm-delay reference for tap-to-snooze
 
   leds_start(LedPattern::Chase, 150);
 
@@ -89,9 +98,11 @@ static void dispatch_buttons() {
       ui_handle_event(ev);
     }
   }
-  if (alarm_state() == AlarmState::Ringing && settings().tapSnooze &&
-      accel_tapped())
-    alarm_snooze();
+  if (alarm_state() == AlarmState::Ringing && settings().tapSnooze) {
+    bool tapped = accel_tapped(); // always drain so it can't accumulate
+    if (tapped && (millis() - s_ringStartMs) >= TAP_ARM_MS)
+      alarm_snooze();
+  }
 }
 
 // ---- Arduino entry points --------------------------------------------------
