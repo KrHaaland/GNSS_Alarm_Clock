@@ -242,9 +242,8 @@ void display_init() {
 }
 
 void display_set_contrast(uint8_t c) {
-  // TEMP: plain on/off during bring-up to rule out PWM. (PWM dimming via
-  // analogWrite(PIN_OLED_BL, c<<4) can go back once the panel shows an image.)
-  digitalWrite(PIN_OLED_BL, c ? HIGH : LOW);
+  // Backlight brightness via PWM on D11/PA19 (TCC1_CH3). 0 = off, 255 = full.
+  analogWrite(PIN_OLED_BL, c);
 }
 
 void display_power(bool on) {

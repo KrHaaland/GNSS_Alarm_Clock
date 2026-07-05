@@ -65,9 +65,9 @@ color TFT**. Driver: [`src/DisplayST7789.cpp`](src/DisplayST7789.cpp).
 - Flush is **synchronous per-byte** (LVGL RGB565 → byte-swapped → streamed). DMA
   is deliberately avoided: the 4-arg DMA `SPI.transfer` fires an unhandled
   `DMAC_1` IRQ that freezes the MCU. Full-frame flush ≈ 15 ms.
-- **Backlight (BLK)** on **D11 / PA19**, currently simple on/off (PWM dimming
-  TODO). *Note:* J3 has no backlight line (HW review #14) — BLK is wired
-  separately.
+- **Backlight (BLK)** on **D11 / PA19**, **PWM-dimmed** via `analogWrite`
+  (TCC1_CH3) — the brightness slider and "dim after" timeout control the level.
+  *Note:* J3 has no backlight line (HW review #14) — BLK is wired separately.
 - **Bring-up aid:** compile-time `DISPLAY_SELFTEST` (default 0) draws RGB fills +
   an edge border instead of the UI, to re-verify SPI / offsets / orientation.
 

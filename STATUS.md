@@ -39,6 +39,9 @@ on the RTC (below); it does not stop the clock from working off GNSS.
   win. Synchronous per-byte flush kept (DMA path freezes the MCU via an
   unhandled `DMAC_1` IRQ).
 - Gated `DISPLAY_SELFTEST` bring-up tool retained (default 0).
+- **Backlight PWM dimming** — `display_set_contrast()` now uses `analogWrite` on
+  D11/PA19 (TCC1_CH3), so the brightness slider + dim-after timeout actually dim
+  the panel (was on/off before).
 
 **Timekeeping / GNSS:**
 - Added `gnss_get_speed_kmph()` and `gnss_get_altitude_m()` (from RMC/GGA, only
@@ -105,8 +108,6 @@ See [`HARDWARE_REVIEW.md`](HARDWARE_REVIEW.md). Most relevant:
 - `CAPGOOD` polarity (HIGH = supercaps charged).
 
 **Polish / nice-to-have:**
-- **Backlight PWM dimming** — `display_set_contrast()` is currently on/off; the
-  `analogWrite(PIN_OLED_BL, …)` PWM path is stubbed out.
 - **Red gamma** — bright red renders slightly brown; ST7789 gamma table could be
   tuned (cosmetic; UI is white-on-black).
 - **Faster flush** — a direct SERCOM data-register loop (or a proper DMAC IRQ
