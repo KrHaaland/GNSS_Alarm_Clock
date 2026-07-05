@@ -1,8 +1,9 @@
-// AccelLIS3DH.cpp — LIS3DH single-tap detection, polled (INT1 unused).
+// AccelLIS3DH.cpp — LIS3DH double-tap + motion detection, polled (INT1 unused).
 #include "AccelLIS3DH.h"
 #include "pins.h"
 #include <Adafruit_LIS3DH.h>
 #include <Wire.h>
+#include <math.h>
 
 // Double-tap: a deliberate two-hit gesture that the speaker's continuous
 // on-board vibration won't reproduce (unlike a single tap). Threshold is a
@@ -10,10 +11,18 @@
 #define CLICK_THRESHOLD 32
 #define POLL_INTERVAL_MS 20
 
+// Motion "shake to wake": summed inter-sample acceleration change (m/s^2 over
+// the 3 axes) above which a deliberate nudge/shake is registered. Set above
+// ambient vibration but below a firm tap. Tune on hardware. (~6 = ~0.6 g.)
+#define MOVE_THRESHOLD 6.0f
+
 static Adafruit_LIS3DH lis;
 static bool present = false;
 static bool tappedFlag = false;
+static bool movedFlag = false;
 static uint32_t lastPollMs = 0;
+static float s_ax = 0, s_ay = 0, s_az = 0; // previous accel sample (m/s^2)
+static bool s_haveAccel = false;
 
 bool accel_begin() {
   present = lis.begin(I2C_ADDR_ACCEL);
@@ -43,6 +52,25 @@ void accel_task() {
   // CLICK_SRC bit 0x20 = double-click detected (0x10 = single, ignored)
   if (src & 0x20)
     tappedFlag = true;
+
+  // Motion detection for "shake/tap to wake": the data-output path is NOT
+  // high-pass filtered (CTRL_REG2 FDS=0), so getEvent() returns absolute
+  // acceleration incl. gravity — steady at rest, spiking when moved. Wake on a
+  // large change between successive samples.
+  sensors_event_t ev;
+  if (lis.getEvent(&ev)) {
+    if (s_haveAccel) {
+      float d = fabsf(ev.acceleration.x - s_ax) +
+                fabsf(ev.acceleration.y - s_ay) +
+                fabsf(ev.acceleration.z - s_az);
+      if (d > MOVE_THRESHOLD)
+        movedFlag = true;
+    }
+    s_ax = ev.acceleration.x;
+    s_ay = ev.acceleration.y;
+    s_az = ev.acceleration.z;
+    s_haveAccel = true;
+  }
 }
 
 bool accel_present() { return present; }
@@ -51,4 +79,10 @@ bool accel_tapped() {
   bool t = tappedFlag;
   tappedFlag = false;
   return t;
+}
+
+bool accel_moved() {
+  bool m = movedFlag;
+  movedFlag = false;
+  return m;
 }

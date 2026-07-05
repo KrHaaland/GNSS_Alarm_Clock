@@ -49,6 +49,9 @@ on the RTC (below); it does not stop the clock from working off GNSS.
 
 **UI:**
 - Clock face: **centered HH:MM, seconds removed**.
+- **Shake / tap to wake** — new `accel_moved()` (motion delta on the LIS3DH)
+  restores full brightness / resets the dim timer, like a button press.
+  Sensitivity `MOVE_THRESHOLD` (~0.6 g) is tunable on the bench.
 
 **I²C:**
 - **Bus dropped 400 → 100 kHz.** RV-3028 intermittently failed to ACK at

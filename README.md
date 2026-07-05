@@ -68,6 +68,8 @@ color TFT**. Driver: [`src/DisplayST7789.cpp`](src/DisplayST7789.cpp).
 - **Backlight (BLK)** on **D11 / PA19**, **PWM-dimmed** via `analogWrite`
   (TCC1_CH3) — the brightness slider and "dim after" timeout control the level.
   *Note:* J3 has no backlight line (HW review #14) — BLK is wired separately.
+- **Shake / tap to wake:** motion on the LIS3DH accelerometer restores full
+  brightness and resets the dim timer, just like a button press.
 - **Bring-up aid:** compile-time `DISPLAY_SELFTEST` (default 0) draws RGB fills +
   an edge border instead of the UI, to re-verify SPI / offsets / orientation.
 

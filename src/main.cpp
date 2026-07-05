@@ -109,6 +109,11 @@ static void dispatch_buttons() {
     if (tapped && (millis() - s_ringStartMs) >= TAP_ARM_MS)
       alarm_snooze();
   }
+
+  // Shake/tap to wake: any motion restores full brightness and resets the dim
+  // timer (same as a button press). Harmless while ringing (already bright).
+  if (accel_moved())
+    ui_poke();
 }
 
 // ---- Arduino entry points --------------------------------------------------
