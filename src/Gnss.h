@@ -18,6 +18,8 @@ bool gnss_get_utc(time_t &utc, uint32_t &ageMs);
 
 bool gnss_has_fix();
 bool gnss_get_position(float &lat, float &lon); // last valid fix
+bool gnss_get_speed_kmph(float &kmph);   // ground speed (RMC), only when fixed
+bool gnss_get_altitude_m(float &meters); // MSL altitude (GGA), only when fixed
 uint8_t gnss_num_sats();
 uint16_t gnss_hdop_x10(); // HDOP * 10, 0xFFFF when unknown
 uint32_t gnss_chars_seen(); // diagnostics: raw NMEA chars processed

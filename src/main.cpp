@@ -8,7 +8,7 @@
 //     QSPI-flash WAV (or builtin melody) through DAC0 -> TPA2016D2, with
 //     optional power-buzzer escalation. Snooze by button short-press or
 //     accelerometer tap, stop by long-press.
-//   - UI: LVGL on the SH1122 256x64 OLED, 4 buttons above the display.
+//   - UI: LVGL on the ST7789 284x76 color TFT, 4 buttons above the display.
 //   - Tunes: the QSPI flash appears as a USB drive (drag & drop WAVs).
 
 #include <Arduino.h>

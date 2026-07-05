@@ -1,4 +1,4 @@
-// Ui.cpp — LVGL 9.5 interface for the 256x64 SH1122 OLED. See Ui.h.
+// Ui.cpp — LVGL 9.5 interface for the 284x76 ST7789 color TFT. See Ui.h.
 //
 // Input model (4 keys, no touch): B2/B3 move focus (LV_KEY_PREV/NEXT),
 // B4 = ENTER, B1 = back. LVGL's keypad indev reserves PREV/NEXT for focus
@@ -89,7 +89,7 @@ static uint8_t s_nfTunes;
 
 // SysInfo
 static lv_obj_t *s_sysLabel;
-static char s_cSys[360];
+static char s_cSys[400];
 
 // Ringing
 static lv_obj_t *s_rgTitle, *s_rgTime, *s_rgHint;
@@ -871,7 +871,7 @@ static void make_tunes() {
 
 // ---------------------------------------------------------- SysInfo scr ---
 static void refresh_sysinfo(bool force) {
-  char lat[16], lon[16], hdop[8], age[16], b[360];
+  char lat[16], lon[16], hdop[8], age[16], spd[24], alt[24], b[400];
   float la, lo;
   bool havePos = gnss_get_position(la, lo);
   if (havePos) {
@@ -886,6 +886,20 @@ static void refresh_sysinfo(bool force) {
     strcpy(hdop, "--");
   else
     snprintf(hdop, sizeof(hdop), "%u.%u", hx / 10, hx % 10);
+  // Speed & altitude (integer-formatted; this build has no %f in printf).
+  float spKmph, altM;
+  if (gnss_get_speed_kmph(spKmph)) {
+    unsigned s10 = (unsigned)(spKmph * 10.0f + 0.5f);
+    snprintf(spd, sizeof(spd), "%u.%u km/h", s10 / 10u, s10 % 10u);
+  } else {
+    strcpy(spd, "--");
+  }
+  if (gnss_get_altitude_m(altM)) {
+    int m = (int)(altM >= 0.0f ? altM + 0.5f : altM - 0.5f);
+    snprintf(alt, sizeof(alt), "%d m", m);
+  } else {
+    strcpy(alt, "--");
+  }
   uint32_t a = clock_last_gnss_sync_age_s();
   if (a == UINT32_MAX)
     strcpy(age, "never");
@@ -903,6 +917,7 @@ static void refresh_sysinfo(bool force) {
   snprintf(b, sizeof(b),
            "Fix %s   Sats %u   HDOP %s\n"
            "Lat %s   Lon %s\n"
+           "Speed %s   Alt %s\n"
            "TZ %s\n"
            "%s\n"
            "Offset %c%02lu:%02lu%s\n"
@@ -910,7 +925,7 @@ static void refresh_sysinfo(bool force) {
            "Caps %s\n"
            "FW " UI_FW_VERSION " " __DATE__,
            gnss_has_fix() ? "yes" : "no", (unsigned)gnss_num_sats(), hdop, lat,
-           lon, settings().tzName, settings().tzPosix, sign,
+           lon, spd, alt, settings().tzName, settings().tzPosix, sign,
            (unsigned long)(ao / 3600), (unsigned long)((ao % 3600) / 60),
            clock_is_dst() ? " DST" : "", age, rtc_present() ? "ok" : "MISSING",
            supercaps_ready() ? "ready" : "charging");

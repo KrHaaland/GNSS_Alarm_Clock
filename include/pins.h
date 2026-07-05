@@ -11,9 +11,9 @@
 //             |             |         | HIGH = supercaps charged)
 //  PA06       | LEDSR-S     | A2      | Right LED section gate (IRLML6344)
 //  PA12/13/14 | SPI         | MOSI/SCK/MISO (SERCOM2) -> display J3
-//  PA16       | OLED_RST    | D13     | SH1122 reset (active low)
-//  PA17       | OLED_DC     | D12     | SH1122 data/command
-//  PA18       | OLED_CS     | D10     | SH1122 chip select (active low)
+//  PA16       | OLED_RST    | D13     | ST7789 reset (active low)
+//  PA17       | OLED_DC     | D12     | ST7789 data/command
+//  PA18       | OLED_CS     | D10     | ST7789 chip select (active low)
 //  PA19       | OLED_BL     | D11     | Display aux/backlight output
 //  PA20       | LEDSB-S     | D9      | Bottom LED section gate
 //  PA21       | LEDSL-S     | D8      | Left LED section gate
@@ -41,7 +41,7 @@
 #pragma once
 #include <Arduino.h>
 
-// --- Display (SH1122 256x64, 4-bit grayscale, 4-wire SPI on J3) ---
+// --- Display (ST7789 284x76 landscape RGB565 color TFT, 4-wire SPI on J3) ---
 #define PIN_OLED_CS 10
 #define PIN_OLED_DC 12
 #define PIN_OLED_RST 13

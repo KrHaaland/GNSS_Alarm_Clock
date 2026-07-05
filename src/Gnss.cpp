@@ -81,6 +81,20 @@ bool gnss_get_position(float &lat, float &lon) {
   return true;
 }
 
+bool gnss_get_speed_kmph(float &kmph) {
+  if (!gnss_has_fix() || !gps.speed.isValid())
+    return false;
+  kmph = (float)gps.speed.kmph();
+  return true;
+}
+
+bool gnss_get_altitude_m(float &meters) {
+  if (!gnss_has_fix() || !gps.altitude.isValid())
+    return false;
+  meters = (float)gps.altitude.meters();
+  return true;
+}
+
 uint8_t gnss_num_sats() {
   if (!gps.satellites.isValid())
     return 0;
