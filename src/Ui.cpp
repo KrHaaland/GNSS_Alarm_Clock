@@ -19,7 +19,7 @@
 #include "AudioEngine.h"
 #include "AmpTPA2016.h"
 #include "Leds.h"
-#include "DisplaySH1122.h"
+#include "DisplayST7789.h"
 #include "RtcRV3028.h"
 #include "Timezone.h"
 
@@ -413,13 +413,11 @@ static void refresh_clock(bool force) {
   snprintf(b, sizeof(b), settings().use24h ? "%02d:%02d" : "%d:%02d", dh, mi);
   bool bigChanged = force || strcmp(s_cBig, b) != 0;
   set_label_if(s_ckBig, s_cBig, sizeof(s_cBig), b, force);
-  if (bigChanged) { // width may change -> re-anchor the satellites
+  if (bigChanged) { // width may change -> re-anchor the AM/PM tag
     lv_obj_update_layout(s_ckBig);
-    lv_obj_align_to(s_ckSec, s_ckBig, LV_ALIGN_OUT_RIGHT_BOTTOM, 3, -9);
     lv_obj_align_to(s_ckAmpm, s_ckBig, LV_ALIGN_OUT_RIGHT_TOP, 3, 10);
   }
-  snprintf(b, sizeof(b), "%02d", se);
-  set_label_if(s_ckSec, s_cSec, sizeof(s_cSec), b, force);
+  (void)se; // seconds are intentionally not displayed
   set_label_if(s_ckAmpm, s_cAmpm, sizeof(s_cAmpm), ampm, force);
 
   int n = snprintf(b, sizeof(b), "%s %02d %s %04d", DAY_ABBR[wd], d,
@@ -453,10 +451,11 @@ static void make_clock() {
 
   s_ckBig = lv_label_create(scr);
   lv_obj_set_style_text_font(s_ckBig, &lv_font_montserrat_48, 0);
-  lv_obj_align(s_ckBig, LV_ALIGN_CENTER, -16, 0);
+  lv_obj_align(s_ckBig, LV_ALIGN_CENTER, 0, 0); // HH:MM centered
 
   s_ckSec = lv_label_create(scr);
   lv_obj_set_style_text_font(s_ckSec, &lv_font_montserrat_16, 0);
+  lv_obj_add_flag(s_ckSec, LV_OBJ_FLAG_HIDDEN); // seconds not shown
 
   s_ckAmpm = lv_label_create(scr);
   lv_obj_set_style_text_font(s_ckAmpm, &lv_font_montserrat_12, 0);

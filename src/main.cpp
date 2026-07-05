@@ -18,7 +18,7 @@
 #include "pins.h"
 #include "Settings.h"
 #include "TuneStorage.h"
-#include "DisplaySH1122.h"
+#include "DisplayST7789.h"
 #include "Buttons.h"
 #include "Leds.h"
 #include "AmpTPA2016.h"
@@ -29,6 +29,12 @@
 #include "ClockKeeper.h"
 #include "AlarmManager.h"
 #include "Ui.h"
+
+// Diagnostic: when 1, setup() scans the whole I2C bus and prints every address
+// that ACKs, in a loop over USB serial, instead of booting normally. Set to 0
+// for normal operation. Known devices: RTC 0x52, LIS3DH 0x18/0x19,
+// 24LC512 EEPROM 0x50, TPA2016 amp 0x58.
+#define I2C_SCAN 0
 
 static bool s_escalated = false;
 static uint32_t s_ringStartMs = 0;   // when the current ring/re-ring began
@@ -111,12 +117,44 @@ void setup() {
   Serial.begin(115200); // USB CDC; no wait — clock must boot headless
 
   Wire.begin();
-  Wire.setClock(400000);
+  // 100 kHz (standard mode): the custom board's I2C devices lack local HF
+  // decoupling (see HARDWARE_REVIEW finding #12), so 400 kHz was unreliable and
+  // the RV-3028 RTC intermittently failed to ACK ("RTC missing"). All bus
+  // devices (RTC, accel, EEPROM, amp) work fine at 100 kHz.
+  Wire.setClock(100000);
 
   settings_begin();
 
   // Storage first: it brings up TinyUSB MSC, best done early after boot.
   storage_begin();
+
+#if I2C_SCAN
+  // Loop-scan the bus so the result streams over USB serial (delay() services
+  // TinyUSB, keeping CDC alive). Reports which 7-bit addresses ACK.
+  for (;;) {
+    Serial.println("=== I2C scan (0x03..0x77) ===");
+    uint8_t found = 0;
+    for (uint8_t a = 0x03; a <= 0x77; a++) {
+      Wire.beginTransmission(a);
+      if (Wire.endTransmission() == 0) {
+        Serial.print("  ACK 0x");
+        if (a < 0x10)
+          Serial.print('0');
+        Serial.print(a, HEX);
+        const char *name = (a == 0x52)                  ? "  <- RV-3028 RTC"
+                           : (a == 0x18 || a == 0x19)   ? "  <- LIS3DH accel"
+                           : (a >= 0x50 && a <= 0x57)   ? "  <- 24LC512 EEPROM"
+                           : (a == 0x58)                ? "  <- TPA2016 amp"
+                                                        : "";
+        Serial.println(name);
+        found++;
+      }
+    }
+    Serial.print("  total = ");
+    Serial.println(found);
+    delay(1500);
+  }
+#endif
 
   buttons_begin();
   leds_begin();

@@ -1,5 +1,20 @@
 # Hardware Design Review — GNSS Alarm Clock (SAMD51J19A board)
 
+> ## Display change (2026-07): SH1122 → ST7789
+> The board now uses an **ST7789 color TFT** (native 76×284, driven landscape
+> **284×76**) in place of the SH1122 256×64 grayscale OLED. Firmware driver:
+> `src/DisplayST7789.cpp`.
+> - Same 4-wire SPI on J3: CS/DC/RST + MOSI/SCK (SERCOM2).
+> - **Backlight (BLK):** the ST7789 needs a backlight supply the OLED did not.
+>   Per finding #14 below, **J3 has no backlight line**, so BLK must be wired
+>   separately — currently assumed on **D11 / PA19** (the old `OLED_BL`,
+>   PWM-capable via TCC1 for dimming). *Confirm/adjust the actual BLK pin.*
+> - Also confirm the **flash BOM substitution** (16 MB Winbond W25Q128, see the
+>   TuneStorage note) when you revise the BOM.
+> - Panel-specific ST7789 params still being tuned on the bench: MADCTL
+>   orientation, display inversion, and the column/row window offsets.
+
+
 Reviewed from `HARDWARE/production/netlist.ipc` (IPC-356 connectivity),
 `HARDWARE/production/bom.csv`, and `HARDWARE/samd51_gps_alarm_clock.kicad_sch`.
 Findings were produced by 8 domain reviewers and each **adversarially
