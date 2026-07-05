@@ -1,5 +1,12 @@
-// TuneStorage.cpp — MX25L3233F 4MB QSPI flash as FAT volume, exposed over
-// TinyUSB MSC. See TuneStorage.h for the contract.
+// TuneStorage.cpp — QSPI flash as a FAT volume, exposed over TinyUSB MSC.
+// See TuneStorage.h for the contract.
+//
+// NOTE ON THE ACTUAL CHIP: the BOM specifies a Macronix MX25L3233F (4 MB),
+// but the assembled boards carry a Winbond W25Q128 (JEDEC 0xEF4018, 16 MB) —
+// an assembly substitution. flash.begin() is given the MX25L3233F descriptor
+// first and falls back to the library's default device list (which includes
+// the W25Q128), so the real size is detected either way and the USB drive
+// correctly reports the chip's true capacity.
 
 #include "TuneStorage.h"
 
