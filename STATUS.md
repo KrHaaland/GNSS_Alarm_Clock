@@ -46,14 +46,19 @@ on the RTC (below); it does not stop the clock from working off GNSS.
 **Timekeeping / GNSS:**
 - Added `gnss_get_speed_kmph()` and `gnss_get_altitude_m()` (from RMC/GGA, only
   when fixed) and a **Speed / Alt line on the System-info screen**.
-- **Fine-grained timezone table** — expanded `kZones[]` from ~32 to **211
+- **Fine-grained timezone table** — expanded `kZones[]` from ~32 to **213
   boxes** covering every UTC zone worldwide: multi-zone countries split
   (US/Canada/Mexico/Russia/Brazil/Australia/China-single…) and no-DST
   exceptions (Arizona, Saskatchewan, Queensland/NT/WA, Kaliningrad, Sonora,
   Quintana Roo, Crimea, Easter I., Lord Howe…), with current 2025/26 DST rules
   (Brazil/Mexico/Iran/Turkey no DST, Egypt DST back, etc.). Generated + verified
-  region-by-region, host-tested (18 cases incl. a 13-city offset/DST check).
-  Flash 86.6% → 88.0%.
+  region-by-region. A **100+ city coverage audit** then caught and fixed 5
+  errors: broad boxes overreaching neighbors (India→Afghanistan, Myanmar→
+  Thailand, Egypt→Jordan — re-aligned to real borders) and two missing
+  territories (added America/Nuuk, Atlantic/Cape_Verde). Host-tested: 19 cases
+  incl. a 13-city offset/DST check + an 8-case border regression guard. Anything
+  not in a box falls to a whole-hour longitude estimate, so every coordinate
+  resolves. Flash 86.6% → 88.0%.
 
 **UI:**
 - Clock face: **centered HH:MM, seconds removed**.
