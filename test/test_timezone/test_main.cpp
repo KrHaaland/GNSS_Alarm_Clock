@@ -197,6 +197,35 @@ static void test_lookup_world(void) {
   TEST_ASSERT_EQUAL_STRING("JST-9", r.posix);
 }
 
+// End-to-end coverage of the expanded box table: look up a city, then evaluate
+// its offset in (northern) winter and summer. Catches offset/DST/ordering bugs.
+static void chk(float lat, float lon, int32_t winter, int32_t summer,
+                bool winterDst, bool summerDst) {
+  TzResult r;
+  tz_lookup(lat, lon, r);
+  bool dst;
+  TEST_ASSERT_EQUAL_INT32(winter, tz_offset_at(r.posix, mk(2026, 1, 15, 12, 0, 0), &dst));
+  TEST_ASSERT_EQUAL(winterDst, dst);
+  TEST_ASSERT_EQUAL_INT32(summer, tz_offset_at(r.posix, mk(2026, 7, 3, 12, 0, 0), &dst));
+  TEST_ASSERT_EQUAL(summerDst, dst);
+}
+
+static void test_lookup_cities(void) {
+  chk(41.88f, -87.63f, -21600, -18000, false, true);  // Chicago  Central (was buggy->Eastern)
+  chk(43.04f, -87.91f, -21600, -18000, false, true);  // Milwaukee Central
+  chk(42.33f, -83.05f, -18000, -14400, false, true);  // Detroit  Eastern
+  chk(39.74f, -104.99f, -25200, -21600, false, true); // Denver   Mountain
+  chk(34.05f, -118.24f, -28800, -25200, false, true); // Los Angeles
+  chk(55.75f, 37.62f, 10800, 10800, false, false);    // Moscow   +3 no DST
+  chk(35.69f, 51.39f, 12600, 12600, false, false);    // Tehran   +3:30 no DST
+  chk(27.70f, 85.32f, 20700, 20700, false, false);    // Kathmandu +5:45 no DST
+  chk(-23.55f, -46.63f, -10800, -10800, false, false);// Sao Paulo -3 (Brazil, no DST since 2019)
+  chk(30.04f, 31.24f, 7200, 10800, false, true);      // Cairo     Egypt DST (summer +3)
+  chk(-26.20f, 28.05f, 7200, 7200, false, false);     // Johannesburg +2 no DST
+  chk(39.90f, 116.40f, 28800, 28800, false, false);   // Beijing   +8 no DST
+  chk(-36.85f, 174.76f, 46800, 43200, true, false);   // Auckland  NZ (southern: Jan=DST)
+}
+
 static void test_lookup_fallback(void) {
   TzResult r;
   tz_lookup(0.0f, -30.0f, r); // mid-Atlantic: round(-30/15) = -2
@@ -225,6 +254,7 @@ int main(void) {
   RUN_TEST(test_unparseable);
   RUN_TEST(test_lookup_europe);
   RUN_TEST(test_lookup_world);
+  RUN_TEST(test_lookup_cities);
   RUN_TEST(test_lookup_fallback);
   return UNITY_END();
 }

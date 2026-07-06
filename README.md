@@ -24,9 +24,11 @@ a color TFT driven by four buttons.
   immediately and refines from GNSS when a fix is available. A cold-start guard
   rejects the L86's free-running "year-2080" date so garbage can't be written
   into the backup RTC.
-- **Timezone from coordinates**: An embedded **offline** lookup (~32-entry
-  bounding-box table, fine-grained in Europe, coarse worldwide) maps the GNSS
-  position to a **POSIX TZ string with DST rules** (e.g. Oslo →
+- **Timezone from coordinates**: An embedded **offline** lookup (~210-box
+  table covering every UTC zone worldwide — multi-zone countries split by
+  region, plus no-DST exceptions like Arizona / Saskatchewan / Queensland /
+  Kaliningrad) maps the GNSS position to a **POSIX TZ string with DST rules**
+  (e.g. Oslo →
   `CET-1CEST,M3.5.0,M10.5.0/3`). The result is **persisted to internal flash**,
   so local time (including DST changes) stays correct after reboot even with no
   fix indoors. A DST-aware POSIX evaluator (`Timezone.*`, host-unit-tested)
