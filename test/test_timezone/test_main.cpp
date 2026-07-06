@@ -226,6 +226,19 @@ static void test_lookup_cities(void) {
   chk(-36.85f, 174.76f, 46800, 43200, true, false);   // Auckland  NZ (southern: Jan=DST)
 }
 
+// Border/coverage cases that were bugs during bring-up (overreaching neighbor
+// boxes and missing island territories). Guards against regressions.
+static void test_lookup_borders(void) {
+  chk(34.5f, 69.2f, 16200, 16200, false, false);   // Kabul     +4:30 (was swallowed by India)
+  chk(34.0f, 71.5f, 18000, 18000, false, false);   // Peshawar  +5    (Pakistan, not Kabul)
+  chk(13.8f, 100.5f, 25200, 25200, false, false);  // Bangkok   +7    (was swallowed by Myanmar)
+  chk(16.8f, 96.2f, 23400, 23400, false, false);   // Yangon    +6:30
+  chk(31.9f, 35.9f, 10800, 10800, false, false);   // Amman     +3    (was swallowed by Egypt)
+  chk(31.8f, 35.2f, 7200, 10800, false, true);     // Jerusalem +2/+3 (Israel DST)
+  chk(64.2f, -51.7f, -7200, -3600, false, true);   // Nuuk      -2/-1 (Greenland, was fallback)
+  chk(14.9f, -23.5f, -3600, -3600, false, false);  // Praia     -1    (Cape Verde, was fallback)
+}
+
 static void test_lookup_fallback(void) {
   TzResult r;
   tz_lookup(0.0f, -30.0f, r); // mid-Atlantic: round(-30/15) = -2
@@ -255,6 +268,7 @@ int main(void) {
   RUN_TEST(test_lookup_europe);
   RUN_TEST(test_lookup_world);
   RUN_TEST(test_lookup_cities);
+  RUN_TEST(test_lookup_borders);
   RUN_TEST(test_lookup_fallback);
   return UNITY_END();
 }
