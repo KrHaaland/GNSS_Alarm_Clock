@@ -444,7 +444,61 @@ static const TzBox kZones[] = {
     {32.5f, 40.0f, 44.0f, 48.6f, "Asia/Tehran", "<+0330>-3:30"},
 };
 
+// --- Polygon zones -----------------------------------------------------------
+// Checked before the box table: polygons drawn with tools/tz_polygon_editor.html
+// capture borders the axis-aligned boxes can't (fjords, panhandles, enclaves).
+// Vertices are centi-degrees in int16 (0.01 deg ~ 1.1 km, 4 bytes/vertex).
+
+struct TzPolyZone {
+  int16_t latMin, latMax, lonMin, lonMax; // bounding box prefilter, centi-deg
+  uint16_t first, count;                  // vertex-PAIR range in kPolyVerts
+  const char *name;
+  const char *posix;
+};
+
+#include "TimezonePolyData.h"
+
+static int32_t to_cdeg(float deg) {
+  return (int32_t)(deg * 100.0f + (deg >= 0.0f ? 0.5f : -0.5f));
+}
+
+// Even-odd ray casting (PNPOLY), integer-only: `v` is [lat,lon] pairs.
+// The division in the classic crossing test is replaced by a cross product
+// whose sign is interpreted per edge direction.
+static bool point_in_poly(int32_t lat, int32_t lon, const int16_t *v,
+                          uint16_t n) {
+  bool inside = false;
+  for (uint16_t i = 0, j = n - 1; i < n; j = i++) {
+    int32_t latI = v[2 * i], lonI = v[2 * i + 1];
+    int32_t latJ = v[2 * j], lonJ = v[2 * j + 1];
+    if ((latI > lat) == (latJ > lat))
+      continue; // edge doesn't straddle the ray's latitude
+    int64_t s = (int64_t)(lonJ - lonI) * (lat - latI) -
+                (int64_t)(lon - lonI) * (latJ - latI);
+    if (latJ > latI ? s > 0 : s < 0)
+      inside = !inside;
+  }
+  return inside;
+}
+
+bool tz_lookup_poly(float lat, float lon, TzResult &out) {
+  int32_t la = to_cdeg(lat), lo = to_cdeg(lon);
+  for (unsigned i = 0; i < kPolyZoneCount; i++) {
+    const TzPolyZone &z = kPolyZones[i];
+    if (la < z.latMin || la > z.latMax || lo < z.lonMin || lo > z.lonMax)
+      continue;
+    if (point_in_poly(la, lo, &kPolyVerts[2u * z.first], z.count)) {
+      snprintf(out.name, sizeof(out.name), "%s", z.name);
+      snprintf(out.posix, sizeof(out.posix), "%s", z.posix);
+      return true;
+    }
+  }
+  return false;
+}
+
 void tz_lookup(float lat, float lon, TzResult &out) {
+  if (tz_lookup_poly(lat, lon, out))
+    return;
   for (unsigned i = 0; i < sizeof(kZones) / sizeof(kZones[0]); i++) {
     const TzBox &b = kZones[i];
     if (lat >= b.latMin && lat <= b.latMax && lon >= b.lonMin &&

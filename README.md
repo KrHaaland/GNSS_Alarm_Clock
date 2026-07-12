@@ -28,8 +28,14 @@ a color TFT driven by four buttons.
   covering every UTC zone worldwide — multi-zone countries split by region, plus
   no-DST exceptions like Arizona / Saskatchewan / Queensland / Kaliningrad;
   borders like US-zones and Afghanistan/Pakistan/India aligned to the real
-  meridians). Anything not inside a box falls back to a whole-hour longitude
-  estimate, so **every coordinate resolves**. Maps the GNSS position to a
+  meridians). **Polygon zones** (`src/TimezonePolyData.h`, ~357 zones /
+  ~500 polygons) are checked before the boxes: real IANA timezone borders
+  generated from timezone-boundary-builder data by `tools/gen_tz_polys.py`
+  (tunable resolution/flash budget; enclaves ordered first), refinable by hand
+  in `tools/tz_polygon_editor.html` (map GUI: draw/edit vertices, probe a
+  point, export the header). Anything not inside a polygon or box falls back
+  to a whole-hour longitude estimate, so **every coordinate resolves**. Maps
+  the GNSS position to a
   **POSIX TZ string with DST rules** (e.g. Oslo →
   `CET-1CEST,M3.5.0,M10.5.0/3`). The result is **persisted to internal flash**,
   so local time (including DST changes) stays correct after reboot even with no
@@ -146,7 +152,8 @@ openocd -c "adapter driver cmsis-dap" -c "transport select swd" \
 |---|---|
 | `src/main.cpp` | Boot order, super-loop, alarm ↔ UI ↔ button routing, I²C @100 kHz |
 | `src/ClockKeeper.*` | UTC anchor, GNSS→RTC discipline, local time / DST |
-| `src/Timezone.*` | Coord→zone table + POSIX TZ/DST evaluator (host-testable) |
+| `src/Timezone.*` | Coord→zone polygons+boxes + POSIX TZ/DST evaluator (host-testable) |
+| `src/TimezonePolyData.h` | Polygon zone data: `tools/gen_tz_polys.py` (world set) / `tools/tz_polygon_editor.html` (hand edits) |
 | `src/Gnss.*` | L86 NMEA via TinyGPS++, PMTK config, position/speed/altitude |
 | `src/RtcRV3028.*` | RV-3028-C7 driver wrapper (backup switchover, UTC, PORF) |
 | `src/AlarmManager.*` | Trigger scan, ringing/snooze/escalation state machine |

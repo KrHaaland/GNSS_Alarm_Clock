@@ -106,7 +106,10 @@ static void tz_auto_check(uint32_t nowMs) {
   bool moved = !s.havePosition || fabsf(lat - s.lastLat) > 0.05f ||
                fabsf(lon - s.lastLon) > 0.05f;
 
-  if (strcmp(r.posix, s.tzPosix) != 0) {
+  // Compare the name too: neighbouring countries often share identical rules
+  // (Oslo/Stockholm are both CET), and the polygon lookup distinguishes them —
+  // comparing only the POSIX string would leave the old name on the display.
+  if (strcmp(r.posix, s.tzPosix) != 0 || strcmp(r.name, s.tzName) != 0) {
     strncpy(s.tzPosix, r.posix, TZ_POSIX_LEN - 1);
     s.tzPosix[TZ_POSIX_LEN - 1] = '\0';
     strncpy(s.tzName, r.name, TZ_NAME_LEN - 1);

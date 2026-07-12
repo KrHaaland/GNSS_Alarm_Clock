@@ -237,6 +237,43 @@ static void test_lookup_borders(void) {
   chk(31.8f, 35.2f, 7200, 10800, false, true);     // Jerusalem +2/+3 (Israel DST)
   chk(64.2f, -51.7f, -7200, -3600, false, true);   // Nuuk      -2/-1 (Greenland, was fallback)
   chk(14.9f, -23.5f, -3600, -3600, false, false);  // Praia     -1    (Cape Verde, was fallback)
+  chk(33.6f, -7.6f, 3600, 3600, false, false);     // Casablanca +1   (Morocco; tzdata Julian rule -> fixed +1)
+}
+
+// --- polygon lookup ---
+// Uses the generated world set in TimezonePolyData.h (tools/gen_tz_polys.py,
+// timezone-boundary-builder data). Test points are well inland: the coasts
+// are simplified with a several-km tolerance, so coastal cities may
+// legitimately fall through to the box table.
+
+static void test_poly_world_hits(void) {
+  TzResult r;
+  TEST_ASSERT_TRUE(tz_lookup_poly(61.10f, 10.50f, r)); // Lillehammer, Norway
+  TEST_ASSERT_EQUAL_STRING("Europe/Oslo", r.name);
+  TEST_ASSERT_EQUAL_STRING(OSLO, r.posix);
+  TEST_ASSERT_TRUE(tz_lookup_poly(62.00f, 15.00f, r)); // central Sweden
+  TEST_ASSERT_EQUAL_STRING("Europe/Stockholm", r.name);
+  TEST_ASSERT_TRUE(tz_lookup_poly(62.50f, 26.00f, r)); // central Finland
+  TEST_ASSERT_EQUAL_STRING("Europe/Helsinki", r.name);
+  TEST_ASSERT_TRUE(tz_lookup_poly(39.00f, -98.00f, r)); // Kansas
+  TEST_ASSERT_EQUAL_STRING("America/Chicago", r.name);
+}
+
+static void test_poly_enclave_priority(void) {
+  TzResult r;
+  // Lesotho lies entirely inside South Africa; zones are emitted smallest
+  // first, so the enclave must win over Africa/Johannesburg.
+  TEST_ASSERT_TRUE(tz_lookup_poly(-29.50f, 28.20f, r));
+  TEST_ASSERT_EQUAL_STRING("Africa/Maseru", r.name);
+}
+
+static void test_poly_miss_falls_back_to_box(void) {
+  TzResult r;
+  // Norfolk Island is below --min-area, so no polygon covers it; the box
+  // table must still resolve it.
+  TEST_ASSERT_FALSE(tz_lookup_poly(-29.04f, 167.95f, r));
+  tz_lookup(-29.04f, 167.95f, r);
+  TEST_ASSERT_EQUAL_STRING("<+11>-11<+12>,M10.1.0,M4.1.0/3", r.posix);
 }
 
 static void test_lookup_fallback(void) {
@@ -269,6 +306,9 @@ int main(void) {
   RUN_TEST(test_lookup_world);
   RUN_TEST(test_lookup_cities);
   RUN_TEST(test_lookup_borders);
+  RUN_TEST(test_poly_world_hits);
+  RUN_TEST(test_poly_enclave_priority);
+  RUN_TEST(test_poly_miss_falls_back_to_box);
   RUN_TEST(test_lookup_fallback);
   return UNITY_END();
 }

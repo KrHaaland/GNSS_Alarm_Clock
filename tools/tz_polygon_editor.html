@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>GNSS Alarm Clock — Timezone Polygon Editor</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; font: 13px/1.45 system-ui, sans-serif; }
+  #app { display: flex; height: 100%; }
+  #side { width: 340px; min-width: 340px; display: flex; flex-direction: column;
+          border-right: 1px solid #ccc; background: #fafafa; }
+  #map { flex: 1; }
+  h1 { font-size: 15px; margin: 10px 12px 2px; }
+  .sub { color: #666; margin: 0 12px 8px; font-size: 12px; }
+  .bar { display: flex; gap: 6px; padding: 6px 12px; flex-wrap: wrap; }
+  button { font: inherit; padding: 5px 10px; border: 1px solid #bbb; border-radius: 5px;
+           background: #fff; cursor: pointer; }
+  button:hover { background: #f0f0f0; }
+  button.primary { background: #2166c9; border-color: #2166c9; color: #fff; }
+  button.primary:hover { background: #1b56aa; }
+  button.on { background: #2166c9; color: #fff; border-color: #2166c9; }
+  button.small { padding: 1px 6px; font-size: 12px; }
+  #zonelist { flex: 1; overflow-y: auto; margin: 4px 0; border-top: 1px solid #ddd; }
+  .zrow { display: flex; align-items: center; gap: 6px; padding: 5px 8px 5px 12px;
+          border-bottom: 1px solid #eee; cursor: pointer; }
+  .zrow.sel { background: #dcebff; }
+  .zrow .sw { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+  .zrow .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .zrow .nm small { color: #888; }
+  .zrow .warn { color: #c26400; }
+  #detail { border-top: 1px solid #ddd; padding: 8px 12px; background: #f2f2f2; }
+  #detail label { display: block; font-size: 11px; color: #555; margin-top: 6px; }
+  #detail input { width: 100%; font: inherit; padding: 4px 6px; border: 1px solid #bbb;
+                  border-radius: 4px; }
+  #detail .hint { font-size: 11px; color: #777; margin-top: 6px; }
+  #status { padding: 5px 12px; font-size: 11px; color: #555; border-top: 1px solid #ddd;
+            background: #f2f2f2; white-space: nowrap; }
+  #drawbar { position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+             z-index: 1000; background: #fff; border: 1px solid #bbb; border-radius: 6px;
+             padding: 6px 10px; box-shadow: 0 2px 8px rgba(0,0,0,.25); display: none;
+             align-items: center; gap: 8px; }
+  /* modal */
+  #modal { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 2000;
+           display: none; align-items: center; justify-content: center; }
+  #modal .box { background: #fff; border-radius: 8px; width: min(860px, 92vw);
+                max-height: 90vh; display: flex; flex-direction: column; padding: 14px; }
+  #modal h2 { margin: 0 0 6px; font-size: 15px; }
+  #modal textarea { width: 100%; flex: 1; min-height: 320px; font: 12px/1.35 ui-monospace,
+                    Consolas, monospace; white-space: pre; }
+  #modal .warns { color: #b00; font-size: 12px; margin: 6px 0; max-height: 90px; overflow: auto; }
+  #modal .row { display: flex; gap: 8px; margin-top: 10px; justify-content: flex-end;
+                align-items: center; }
+  /* map handles */
+  .vh { width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%;
+        background: #fff; border: 2px solid #d33; cursor: move; }
+  .mh { width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; border-radius: 50%;
+        background: #fff; border: 2px solid #d33; opacity: .45; cursor: copy; }
+  .leaflet-container { cursor: default; }
+  .drawing .leaflet-container { cursor: crosshair; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="side">
+    <h1>Timezone Polygon Editor</h1>
+    <p class="sub">Draws <code>TimezonePolyData.h</code> for the GNSS Alarm Clock.
+       Zones are matched top-down (first hit wins), before the box table.</p>
+    <div class="bar">
+      <button id="bNew" class="primary">✚ New polygon</button>
+      <button id="bImport">Import…</button>
+      <button id="bExport">Export…</button>
+      <button id="bProbe" title="Click the map to test which zone the firmware would pick">🔍 Probe</button>
+      <button id="bBoxes" title="Show the 213 kZones boxes from Timezone.cpp as a reference layer">▦ Boxes</button>
+      <button id="bGoogle" title="Use Google Maps base layers (needs your own Maps JavaScript API key)">🔑 Google</button>
+    </div>
+    <div id="zonelist"></div>
+    <div id="detail" hidden>
+      <label>IANA name (max 19 chars)</label>
+      <input id="fName" maxlength="19" list="dlNames" spellcheck="false">
+      <label>POSIX TZ string (max 47 chars)</label>
+      <input id="fPosix" maxlength="47" list="dlPosix" spellcheck="false">
+      <div class="hint" id="fInfo"></div>
+      <div class="hint">Drag ⬤ to move a vertex, drag a faint ⬤ between two
+        vertices to insert one, right-click a vertex to delete it.</div>
+    </div>
+    <div id="status">–</div>
+  </div>
+  <div id="map"></div>
+</div>
+<div id="drawbar">
+  <span id="drawinfo">0 points — click the map to add</span>
+  <button id="bFinish" class="primary">Finish</button>
+  <button id="bCancel">Cancel</button>
+</div>
+<div id="modal">
+  <div class="box">
+    <h2 id="mTitle"></h2>
+    <div id="mHelp" class="sub" style="margin:0 0 8px"></div>
+    <div id="mWarns" class="warns"></div>
+    <textarea id="mText" spellcheck="false"></textarea>
+    <div class="row">
+      <input type="file" id="mFile" accept=".h,.json,.txt" style="display:none">
+      <button id="mLoad">Load file…</button>
+      <label id="mMergeWrap" style="font-size:12px"><input type="checkbox" id="mMerge">
+        merge on top (keep existing, imported win)</label>
+      <span style="flex:1"></span>
+      <button id="mCopy">Copy</button>
+      <button id="mDownload">Download</button>
+      <button id="mApply" class="primary">Import</button>
+      <button id="mClose">Close</button>
+    </div>
+  </div>
+</div>
+<datalist id="dlNames"></datalist>
+<datalist id="dlPosix"></datalist>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="https://unpkg.com/leaflet.gridlayer.googlemutant@0.14.1/dist/Leaflet.GoogleMutant.js"></script>
+<script>
+'use strict';
+
+// Snapshot of the kZones box table in src/Timezone.cpp (reference layer only —
+// the boxes themselves stay in Timezone.cpp). Re-import via Import… if the
+// table changes: paste the kZones lines and the layer is replaced.
+let REF_BOXES = [[36.8,39.9,-31.4,-24.7,"Atlantic/Azores","<-01>1<+00>,M3.5.0/0,M10.5.0/1"],[32.3,33.2,-17.4,-16.2,"Atlantic/Madeira","WET0WEST,M3.5.0/1,M10.5.0"],[27.5,29.5,-18.3,-13.3,"Atlantic/Canary","WET0WEST,M3.5.0/1,M10.5.0"],[61.3,62.5,-7.8,-6.2,"Atlantic/Faroe","WET0WEST,M3.5.0/1,M10.5.0"],[54.3,55.4,19.6,22.9,"Europe/Kaliningrad","EET-2"],[44.3,46.3,32.4,36.7,"Europe/Simferopol","MSK-3"],[37.6,39.8,19.3,21.0,"Europe/Athens","EET-2EEST,M3.5.0/3,M10.5.0/4"],[45.5,55.0,45.5,52.0,"Europe/Samara","<+04>-4"],[54.3,55.4,19.3,22.9,"Europe/Kaliningrad","EET-2"],[59.5,68.5,48.0,64.0,"Europe/Moscow","MSK-3"],[46.0,55.5,45.8,54.0,"Europe/Samara","<+04>-4"],[45.8,54.5,141.5,144.6,"Asia/Sakhalin","<+11>-11"],[63.0,72.0,-180.0,-169.0,"Asia/Anadyr","<+12>-12"],[39.1,43.1,72.0,80.3,"Asia/Bishkek","<+06>-6"],[38.3,41.95,44.7,50.6,"Asia/Baku","<+04>-4"],[38.8,41.35,43.4,46.7,"Asia/Yerevan","<+04>-4"],[41.0,43.0,40.0,46.8,"Asia/Tbilisi","<+04>-4"],[41.6,48.3,-86.6,-82.3,"America/Detroit","EST5EDT,M3.2.0,M11.1.0"],[37.8,41.8,-87.1,-84.8,"America/Indiana","EST5EDT,M3.2.0,M11.1.0"],[31.33,37.0,-114.75,-109.05,"America/Phoenix","MST7"],[50.5,54.5,-180.0,-169.5,"America/Adak","HST10HDT,M3.2.0,M11.1.0"],[51.5,53.5,172.0,180.0,"America/Adak","HST10HDT,M3.2.0,M11.1.0"],[18.5,22.5,-160.5,-154.5,"Pacific/Honolulu","HST10"],[60.0,69.7,-141.2,-124.0,"America/Whitehorse","MST7"],[48.9,60.0,-110.0,-101.4,"America/Regina","CST6"],[46.5,51.8,-59.5,-52.5,"America/St_Johns","NST3:30NDT,M3.2.0,M11.1.0"],[66.0,78.0,-120.0,-96.0,"America/Cambridge","MST7MDT,M3.2.0,M11.1.0"],[30.7,31.9,-108.6,-105.6,"America/Cd_Juarez","MST7MDT,M3.2.0,M11.1.0"],[29.0,30.2,-105.6,-103.4,"America/Ojinaga","CST6CDT,M3.2.0,M11.1.0"],[26.0,32.5,-115.2,-108.4,"America/Hermosillo","MST7"],[17.8,21.7,-89.3,-86.7,"America/Cancun","EST5"],[25.8,29.5,-101.5,-97.0,"America/Matamoros","CST6CDT,M3.2.0,M11.1.0"],[-1.5,0.8,-92.1,-89.2,"Pacific/Galapagos","<-06>6"],[-11.2,-7.0,-73.5,-66.7,"America/Rio_Branco","<-05>5"],[-56.0,-49.0,-76.0,-66.0,"America/Punta_Aren","<-03>3"],[-27.5,-27.0,-109.6,-109.1,"Pacific/Easter","<-06>6<-05>,M9.1.6/22,M4.1.6/22"],[-4.0,-3.7,-32.6,-32.3,"America/Noronha","<-02>2"],[6.7,13.7,92.1,94.3,"Asia/Kolkata","IST-5:30"],[26.3,30.5,80.0,88.3,"Asia/Kathmandu","<+0545>-5:45"],[5.8,9.9,79.5,81.9,"Asia/Colombo","<+0530>-5:30"],[20.5,26.7,88.5,92.7,"Asia/Dhaka","<+06>-6"],[26.7,28.4,88.7,92.2,"Asia/Thimphu","<+06>-6"],[9.5,28.6,92.2,97.8,"Asia/Yangon","<+0630>-6:30"],[45.0,52.1,87.7,95.5,"Asia/Hovd","<+07>-7"],[1.15,1.48,103.6,104.1,"Asia/Singapore","<+08>-8"],[4.0,5.1,114.0,115.4,"Asia/Brunei","<+08>-8"],[22.15,22.58,113.8,114.5,"Asia/Hong_Kong","HKT-8"],[22.1,22.25,113.5,113.6,"Asia/Macau","<+08>-8"],[-9.5,-8.1,125.0,127.4,"Asia/Dili","<+09>-9"],[-36.0,-13.5,112.0,129.0,"Australia/Perth","AWST-8"],[-26.0,-10.5,129.0,138.0,"Australia/Darwin","ACST-9:30"],[-28.5,-9.0,138.0,154.0,"Australia/Brisbane","AEST-10"],[-31.9,-31.4,158.8,159.2,"Australia/Lord_Howe","<+1030>-10:30<+11>-11,M10.1.0,M4.1.0"],[-44.5,-43.5,-177.0,-176.0,"Pacific/Chatham","<+1245>-12:45<+1345>,M9.5.0/2:45,M4.1.0/3:45"],[-29.3,-28.9,167.8,168.1,"Pacific/Norfolk","<+11>-11<+12>,M10.1.0,M4.1.0/3"],[-11.0,-7.0,-141.0,-138.0,"Pacific/Marquesas","<-0930>9:30"],[-24.0,-22.0,-136.0,-134.0,"Pacific/Gambier","<-09>9"],[-6.0,-2.0,-175.0,-169.0,"Pacific/Kanton","<+13>-13"],[-12.0,6.0,-162.0,-150.0,"Pacific/Kiritimati","<+14>-14"],[-4.6,-1.0,28.8,31.0,"Africa/Kigali","CAT-2"],[31.0,38.4,61.5,71.1,"Asia/Kabul","<+0430>-4:30"],[14.5,17.5,-25.5,-22.5,"Atlantic/Cape_Verde","<-01>1"],[49.8,61.0,-8.7,1.9,"Europe/London","GMT0BST,M3.5.0/1,M10.5.0"],[51.3,55.5,-10.6,-5.9,"Europe/Dublin","GMT0BST,M3.5.0/1,M10.5.0"],[36.9,42.2,-9.6,-6.1,"Europe/Lisbon","WET0WEST,M3.5.0/1,M10.5.0"],[60.0,70.1,21.0,31.6,"Europe/Helsinki","EET-2EEST,M3.5.0/3,M10.5.0/4"],[54.3,56.4,20.9,26.6,"Europe/Vilnius","EET-2EEST,M3.5.0/3,M10.5.0/4"],[56.4,59.7,20.9,28.2,"Europe/Tallinn","EET-2EEST,M3.5.0/3,M10.5.0/4"],[51.6,54.3,23.5,32.8,"Europe/Minsk","<+03>-3"],[54.3,56.2,26.6,32.8,"Europe/Minsk","<+03>-3"],[44.0,51.6,22.1,38.5,"Europe/Kyiv","EET-2EEST,M3.5.0/3,M10.5.0/4"],[45.4,48.5,26.6,30.2,"Europe/Chisinau","EET-2EEST,M3.5.0/3,M10.5.0/4"],[41.2,48.3,22.5,29.7,"Europe/Bucharest","EET-2EEST,M3.5.0/3,M10.5.0/4"],[34.8,41.8,21.0,26.6,"Europe/Athens","EET-2EEST,M3.5.0/3,M10.5.0/4"],[34.5,35.8,32.2,34.7,"Asia/Nicosia","EET-2EEST,M3.5.0/3,M10.5.0/4"],[35.8,42.2,26.6,44.8,"Europe/Istanbul","<+03>-3"],[52.4,60.0,28.2,50.0,"Europe/Moscow","MSK-3"],[60.0,70.5,31.6,50.0,"Europe/Moscow","MSK-3"],[44.0,52.4,38.5,50.0,"Europe/Moscow","MSK-3"],[41.2,70.0,27.0,52.0,"Europe/Moscow","MSK-3"],[50.0,73.0,52.0,70.0,"Asia/Yekaterinburg","<+05>-5"],[54.0,59.0,70.0,77.0,"Asia/Omsk","<+06>-6"],[51.0,79.0,77.0,99.0,"Asia/Krasnoyarsk","<+07>-7"],[50.0,79.0,99.0,110.0,"Asia/Irkutsk","<+08>-8"],[56.0,74.0,110.0,141.0,"Asia/Yakutsk","<+09>-9"],[49.0,56.0,110.0,130.0,"Asia/Chita","<+09>-9"],[42.0,56.0,130.0,144.0,"Asia/Vladivostok","<+10>-10"],[58.0,71.0,144.0,158.0,"Asia/Magadan","<+11>-11"],[50.0,72.0,158.0,180.0,"Asia/Kamchatka","<+12>-12"],[37.2,45.6,55.9,73.2,"Asia/Tashkent","<+05>-5"],[35.1,42.8,52.4,66.7,"Asia/Ashgabat","<+05>-5"],[36.6,41.05,67.3,75.2,"Asia/Dushanbe","<+05>-5"],[43.0,52.2,87.5,96.0,"Asia/Hovd","<+07>-7"],[37.0,47.5,-85.0,-66.9,"America/New_York","EST5EDT,M3.2.0,M11.1.0"],[24.4,37.0,-85.0,-75.4,"America/New_York","EST5EDT,M3.2.0,M11.1.0"],[37.0,49.4,-102.0,-85.0,"America/Chicago","CST6CDT,M3.2.0,M11.1.0"],[25.8,37.0,-103.0,-85.0,"America/Chicago","CST6CDT,M3.2.0,M11.1.0"],[42.0,49.0,-116.8,-102.0,"America/Denver","MST7MDT,M3.2.0,M11.1.0"],[37.0,42.0,-114.05,-102.0,"America/Denver","MST7MDT,M3.2.0,M11.1.0"],[31.3,37.0,-109.05,-103.0,"America/Denver","MST7MDT,M3.2.0,M11.1.0"],[42.0,49.0,-124.85,-116.8,"America/Los_Angeles","PST8PDT,M3.2.0,M11.1.0"],[32.4,42.0,-124.5,-114.05,"America/Los_Angeles","PST8PDT,M3.2.0,M11.1.0"],[51.0,71.5,-169.5,-129.5,"America/Anchorage","AKST9AKDT,M3.2.0,M11.1.0"],[48.0,60.0,-139.5,-120.0,"America/Vancouver","PST8PDT,M3.2.0,M11.1.0"],[48.9,60.0,-120.0,-110.0,"America/Edmonton","MST7MDT,M3.2.0,M11.1.0"],[60.0,78.8,-124.0,-102.0,"America/Yellowknife","MST7MDT,M3.2.0,M11.1.0"],[48.9,60.0,-101.4,-90.0,"America/Winnipeg","CST6CDT,M3.2.0,M11.1.0"],[41.6,57.0,-90.0,-66.5,"America/Toronto","EST5EDT,M3.2.0,M11.1.0"],[57.0,62.5,-85.0,-66.5,"America/Toronto","EST5EDT,M3.2.0,M11.1.0"],[43.0,48.3,-66.5,-59.5,"America/Halifax","AST4ADT,M3.2.0,M11.1.0"],[51.3,60.5,-66.5,-55.4,"America/Goose_Bay","AST4ADT,M3.2.0,M11.1.0"],[60.0,84.0,-85.0,-61.0,"America/Iqaluit","EST5EDT,M3.2.0,M11.1.0"],[60.0,78.0,-102.0,-85.0,"America/Rankin","CST6CDT,M3.2.0,M11.1.0"],[28.0,31.8,-108.7,-103.3,"America/Chihuahua","CST6"],[22.5,28.0,-115.6,-105.2,"America/Mazatlan","MST7"],[21.0,23.0,-105.8,-104.3,"America/Mazatlan","MST7"],[28.0,32.7,-118.3,-112.7,"America/Tijuana","PST8PDT,M3.2.0,M11.1.0"],[-13.7,5.3,-70.2,-58.0,"America/Manaus","<-04>4"],[-23.5,-7.3,-61.6,-50.4,"America/Cuiaba","<-04>4"],[-25.5,-18.3,-70.6,-67.9,"America/Santiago","<-04>4<-03>,M9.1.6/24,M4.1.6/24"],[-37.8,-25.5,-73.7,-69.3,"America/Santiago","<-04>4<-03>,M9.1.6/24,M4.1.6/24"],[-49.0,-37.8,-75.8,-71.6,"America/Santiago","<-04>4<-03>,M9.1.6/24,M4.1.6/24"],[1.2,6.8,99.6,104.7,"Asia/Kuala_Lumpur","<+08>-8"],[0.85,7.4,109.5,119.3,"Asia/Kuching","<+08>-8"],[-11.0,6.1,95.0,114.4,"Asia/Jakarta","WIB-7"],[-11.0,4.9,114.4,125.0,"Asia/Makassar","WITA-8"],[-11.0,4.7,125.0,141.1,"Asia/Jayapura","WIT-9"],[41.5,52.2,95.5,119.9,"Asia/Ulaanbaatar","<+08>-8"],[33.0,43.0,124.6,131.2,"Asia/Seoul","KST-9"],[21.9,25.4,119.3,122.1,"Asia/Taipei","CST-8"],[24.0,30.0,122.85,129.7,"Asia/Tokyo","JST-9"],[-38.5,-26.0,129.0,141.0,"Australia/Adelaide","ACST-9:30ACDT,M10.1.0,M4.1.0/3"],[-44.0,-28.5,141.0,154.0,"Australia/Sydney","AEST-10AEDT,M10.1.0,M4.1.0/3"],[4.0,8.0,154.5,163.0,"Pacific/Pohnpei","<+11>-11"],[0.0,11.0,137.0,154.5,"Pacific/Chuuk","<+10>-10"],[23.5,37.5,61.0,74.6,"Asia/Karachi","PKT-5"],[59.0,84.0,-73.0,-40.0,"America/Nuuk","<-02>2<-01>,M3.5.0,M10.5.0/0"],[63.0,66.8,-24.7,-13.2,"Atlantic/Reykjavik","GMT0"],[35.9,51.1,-9.5,8.3,"Europe/Paris","CET-1CEST,M3.5.0,M10.5.0/3"],[54.5,71.5,4.5,23.5,"Europe/Oslo","CET-1CEST,M3.5.0,M10.5.0/3"],[45.7,55.1,2.5,24.2,"Europe/Berlin","CET-1CEST,M3.5.0,M10.5.0/3"],[35.3,47.1,6.5,22.5,"Europe/Rome","CET-1CEST,M3.5.0,M10.5.0/3"],[40.5,54.9,46.5,87.5,"Asia/Almaty","<+05>-5"],[41.5,52.2,96.0,120.5,"Asia/Ulaanbaatar","<+08>-8"],[14.3,30.0,-105.7,-86.5,"America/Mexico_City","CST6"],[7.9,18.5,-92.5,-82.9,"America/Guatemala","CST6"],[7.0,9.7,-82.9,-77.1,"America/Panama","EST5"],[-4.3,13.0,-79.1,-72.0,"America/Bogota","<-05>5"],[-5.0,1.5,-81.1,-75.2,"America/Guayaquil","<-05>5"],[-18.4,0.05,-81.4,-69.0,"America/Lima","<-05>5"],[0.6,12.6,-72.0,-59.8,"America/Caracas","<-04>4"],[-22.2,-9.7,-69.0,-57.5,"America/La_Paz","<-04>4"],[1.1,8.6,-61.4,-57.2,"America/Guyana","<-04>4"],[1.8,6.1,-57.2,-53.9,"America/Paramaribo","<-03>3"],[2.1,5.8,-54.6,-51.6,"America/Cayenne","<-03>3"],[-34.0,5.3,-58.0,-34.7,"America/Sao_Paulo","<-03>3"],[-55.1,-22.2,-73.6,-53.6,"America/Cordoba","<-03>3"],[-27.6,-19.3,-62.6,-54.3,"America/Asuncion","<-03>3"],[-35.0,-30.0,-58.5,-53.0,"America/Montevideo","<-03>3"],[19.7,23.3,-85.0,-74.0,"America/Havana","CST5CDT,M3.2.0/0,M11.1.0/1"],[18.0,20.1,-74.5,-71.7,"America/Port-au-Pr","EST5EDT,M3.2.0,M11.1.0"],[17.5,20.1,-71.7,-64.2,"America/Puerto_Rico","AST4"],[17.6,18.6,-78.5,-76.1,"America/Jamaica","EST5"],[6.7,35.7,68.1,97.5,"Asia/Kolkata","IST-5:30"],[-0.8,7.1,72.5,73.8,"Asia/Maldives","<+05>-5"],[5.5,22.4,97.5,109.6,"Asia/Bangkok","<+07>-7"],[29.0,38.0,128.5,136.0,"Asia/Tokyo","JST-9"],[34.0,45.6,136.0,146.0,"Asia/Tokyo","JST-9"],[4.5,21.2,116.9,126.7,"Asia/Manila","<+08>-8"],[18.1,53.6,73.5,134.8,"Asia/Shanghai","CST-8"],[-47.5,-34.0,166.0,179.0,"Pacific/Auckland","NZST-12NZDT,M9.5.0,M4.1.0/3"],[-23.0,-19.0,163.0,168.5,"Pacific/Noumea","<+11>-11"],[-20.5,-13.0,166.0,170.5,"Pacific/Efate","<+11>-11"],[-12.5,-3.5,154.0,167.0,"Pacific/Guadalcanal","<+11>-11"],[-21.0,-12.0,176.0,180.0,"Pacific/Fiji","<+12>-12"],[-11.0,-5.0,176.0,180.0,"Pacific/Funafuti","<+12>-12"],[-14.5,-13.0,-179.0,-176.0,"Pacific/Wallis","<+12>-12"],[-24.0,-15.0,-177.0,-173.0,"Pacific/Tongatapu","<+13>-13"],[-14.2,-13.0,-173.0,-171.4,"Pacific/Apia","<+13>-13"],[-9.5,-8.4,-172.7,-171.0,"Pacific/Fakaofo","<+13>-13"],[-14.5,-14.0,-171.3,-169.5,"Pacific/Pago_Pago","SST11"],[-19.5,-18.5,-170.2,-169.5,"Pacific/Niue","<-11>11"],[-22.0,-18.0,-160.0,-157.0,"Pacific/Rarotonga","<-10>10"],[-28.0,-7.0,-154.0,-134.0,"Pacific/Tahiti","<-10>10"],[-3.0,4.0,172.0,177.0,"Pacific/Tarawa","<+12>-12"],[-1.0,0.0,166.0,167.5,"Pacific/Nauru","<+12>-12"],[4.0,15.0,165.0,173.0,"Pacific/Majuro","<+12>-12"],[2.0,11.0,131.0,135.0,"Pacific/Palau","<+09>-9"],[13.0,21.0,144.0,146.5,"Pacific/Guam","ChST-10"],[-26.0,-23.0,-131.0,-124.0,"Pacific/Pitcairn","<-08>8"],[-12.0,-1.0,140.0,154.0,"Port_Moresby","<+10>-10"],[21.0,36.1,-17.2,-1.0,"Africa/Casablanca","<+01>-1"],[18.5,37.5,-1.0,11.7,"Africa/Algiers","CET-1"],[4.0,27.0,-17.6,2.0,"Africa/Abidjan","GMT0"],[-18.0,23.5,2.0,24.0,"Africa/Lagos","WAT-1"],[19.5,33.5,9.0,25.5,"Africa/Tripoli","EET-2"],[21.7,31.9,24.6,34.9,"Africa/Cairo","EET-2EEST,M4.5.5/0,M10.5.4/24"],[3.4,22.3,21.8,37.5,"Africa/Khartoum","CAT-2"],[-29.0,-16.9,11.5,25.3,"Africa/Windhoek","CAT-2"],[-27.0,-8.0,30.0,41.0,"Africa/Maputo","CAT-2"],[-35.0,-22.0,16.0,33.5,"Africa/Johannesburg","SAST-2"],[-5.0,18.2,35.0,52.0,"Africa/Nairobi","EAT-3"],[-11.8,4.5,29.3,41.0,"Africa/Kampala","EAT-3"],[-26.0,-11.5,43.0,50.9,"Indian/Antananarivo","EAT-3"],[-21.5,-3.5,54.5,63.6,"Indian/Mauritius","<+04>-4"],[29.4,33.4,34.2,35.7,"Asia/Jerusalem","IST-2IDT,M3.5.5/2,M10.5.0/2"],[33.0,34.7,35.0,36.7,"Asia/Beirut","EET-2EEST,M3.5.0/0,M10.5.0/0"],[29.0,37.4,35.0,42.5,"Asia/Amman","<+03>-3"],[29.0,37.4,38.8,48.0,"Asia/Baghdad","<+03>-3"],[12.0,32.2,36.0,52.0,"Asia/Riyadh","<+03>-3"],[16.0,26.5,51.8,60.0,"Asia/Dubai","<+04>-4"],[26.3,40.0,48.6,61.0,"Asia/Tehran","<+0330>-3:30"],[32.5,40.0,44.0,48.6,"Asia/Tehran","<+0330>-3:30"]];
+
+// ---------------------------------------------------------------- state ----
+const LS_KEY = 'tzpolyeditor.v1';
+const DEMO = {version: 1, zones: [{name: 'Europe/Oslo',
+  posix: 'CET-1CEST,M3.5.0,M10.5.0/3',
+  verts: [[57.95,7],[58.8,5.4],[60.8,4.6],[62.2,5],[63.4,7.5],[64.8,10.5],
+          [66.5,12],[67.9,12.7],[69,15.5],[70,18],[71.3,25],[71,28.5],
+          [70.5,31.2],[69.6,30.5],[68.9,28.8],[69.4,25.7],[68.6,23],
+          [69.05,20.5],[68.3,17.9],[66.2,14.5],[64,13.7],[63.2,11.9],
+          [61.6,12.4],[60.1,12.6],[58.9,11.7],[59,10.4]]}]};
+
+let zones = [];          // [{name, posix, verts:[[lat,lon],...]}] order = priority
+let selected = -1;
+let mode = 'idle';       // idle | draw | probe
+let drawVerts = [];
+
+try {
+  const s = JSON.parse(localStorage.getItem(LS_KEY));
+  if (s && Array.isArray(s.zones)) zones = s.zones;
+  else zones = DEMO.zones;
+} catch (e) { zones = DEMO.zones; }
+
+function save() { localStorage.setItem(LS_KEY, JSON.stringify({version: 1, zones})); }
+
+// ------------------------------------------------------------------ map ----
+// Carto is the default base map: openstreetmap.org's own tile servers rate-
+// limit/block heavy use, Carto serves the same OSM data without that. Google
+// layers appear when an API key is supplied (🔑 button, official Maps JS API).
+const carto = L.tileLayer(
+  'https://{s}.basemap.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+  {maxZoom: 20, subdomains: 'abcd',
+   attribution: '© OpenStreetMap contributors © CARTO'});
+const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  {maxZoom: 19, attribution: '© OpenStreetMap contributors'});
+const sat = L.tileLayer(
+  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  {maxZoom: 18, attribution: 'Imagery © Esri'});
+const esriStreet = L.tileLayer(
+  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+  {maxZoom: 18, attribution: '© Esri'});
+const topo = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+  {maxZoom: 15, subdomains: 'abc',
+   attribution: '© OpenStreetMap contributors, SRTM | © OpenTopoMap (CC-BY-SA)'});
+const map = L.map('map', {layers: [carto], worldCopyJump: true}).setView([55, 15], 4);
+const baseLayers = {'Carto (OSM data)': carto, 'Esri Street': esriStreet,
+                    'OpenTopoMap': topo, 'OpenStreetMap': osm,
+                    'Satellite (Esri)': sat};
+const layersCtrl = L.control.layers(baseLayers).addTo(map);
+L.control.scale().addTo(map);
+
+const GKEY_LS = 'tzpolyeditor.gmapskey';
+function loadGoogle() {
+  const key = localStorage.getItem(GKEY_LS);
+  if (!key || window.google) return;
+  window.__gmReady = () => {
+    const road = L.gridLayer.googleMutant({type: 'roadmap'});
+    const hyb  = L.gridLayer.googleMutant({type: 'hybrid'});
+    layersCtrl.addBaseLayer(road, 'Google Maps');
+    layersCtrl.addBaseLayer(hyb, 'Google Hybrid');
+    Object.values(baseLayers).forEach(l => map.removeLayer(l));
+    road.addTo(map);
+  };
+  const s = document.createElement('script');
+  s.src = 'https://maps.googleapis.com/maps/api/js?key=' +
+          encodeURIComponent(key) + '&callback=__gmReady';
+  s.onerror = () => alert('Could not load Google Maps — check the API key / network.');
+  document.head.appendChild(s);
+}
+document.getElementById('bGoogle').addEventListener('click', () => {
+  const cur = localStorage.getItem(GKEY_LS) || '';
+  const key = prompt(
+    'Google Maps JavaScript API key (stored only in this browser).\n' +
+    'Get one at https://console.cloud.google.com (Maps JavaScript API).\n' +
+    'Leave empty to remove the key.', cur);
+  if (key === null) return;
+  if (!key.trim()) { localStorage.removeItem(GKEY_LS); alert('Key removed — reload the page.'); return; }
+  localStorage.setItem(GKEY_LS, key.trim());
+  if (window.google) alert('Key saved.'); else loadGoogle();
+});
+loadGoogle();
+
+const COLORS = ['#d33','#1c7c2e','#2166c9','#a01ec9','#c97a16','#0e8f8f',
+                '#c92161','#5c7a00'];
+const zoneLayer = L.layerGroup().addTo(map);
+const editLayer = L.layerGroup().addTo(map);   // vertex/midpoint handles
+const drawLayer = L.layerGroup().addTo(map);
+const boxLayer  = L.layerGroup();              // reference boxes, toggled
+
+function normLng(l) { return ((l + 180) % 360 + 360) % 360 - 180; }
+let suppressMapClick = false;
+
+// ------------------------------------------------------------ rendering ----
+function zoneColor(i) { return COLORS[i % COLORS.length]; }
+
+function zoneProblems(z) {
+  const p = [];
+  if (!z.name) p.push('name is empty');
+  if (z.name.length > 19) p.push('name > 19 chars');
+  if (!z.posix) p.push('POSIX string is empty');
+  if (z.posix.length > 47) p.push('POSIX > 47 chars');
+  if (z.verts.length < 3) p.push('fewer than 3 vertices');
+  const lons = z.verts.map(v => v[1]);
+  if (Math.max(...lons) - Math.min(...lons) > 180)
+    p.push('spans > 180° longitude — crosses the antimeridian? split it');
+  return p;
+}
+
+function renderMap() {
+  zoneLayer.clearLayers();
+  zones.forEach((z, i) => {
+    const poly = L.polygon(z.verts, {
+      color: zoneColor(i), weight: i === selected ? 3 : 2,
+      fillOpacity: i === selected ? 0.25 : 0.12,
+    }).addTo(zoneLayer);
+    poly.bindTooltip(`${i + 1}. ${z.name || '(unnamed)'}`, {sticky: true});
+    poly.on('click', () => {
+      if (mode !== 'idle') return;
+      suppressMapClick = true;
+      select(i);
+    });
+  });
+  renderHandles();
+}
+
+function renderHandles() {
+  editLayer.clearLayers();
+  if (selected < 0 || mode === 'draw') return;
+  const z = zones[selected];
+  const n = z.verts.length;
+  z.verts.forEach((v, i) => {
+    const m = L.marker(v, {draggable: true, icon: L.divIcon({className: 'vh'})})
+      .addTo(editLayer);
+    m.on('drag', e => {
+      const ll = e.target.getLatLng();
+      z.verts[i] = [ll.lat, normLng(ll.lng)];
+      redrawSelectedPolygon();
+    });
+    m.on('dragend', () => { save(); renderMap(); renderList(); });
+    m.on('contextmenu', e => {
+      e.originalEvent.preventDefault();
+      if (z.verts.length <= 3) return;
+      z.verts.splice(i, 1);
+      save(); renderMap(); renderList();
+    });
+  });
+  // midpoints: drag to insert a vertex
+  z.verts.forEach((v, i) => {
+    const w = z.verts[(i + 1) % n];
+    const mid = [(v[0] + w[0]) / 2, (v[1] + w[1]) / 2];
+    const m = L.marker(mid, {draggable: true, icon: L.divIcon({className: 'mh'})})
+      .addTo(editLayer);
+    m.on('dragstart', () => { z.verts.splice(i + 1, 0, mid.slice()); });
+    m.on('drag', e => {
+      const ll = e.target.getLatLng();
+      z.verts[i + 1] = [ll.lat, normLng(ll.lng)];
+      redrawSelectedPolygon();
+    });
+    m.on('dragend', () => { save(); renderMap(); renderList(); });
+  });
+}
+
+function redrawSelectedPolygon() {
+  // light-weight redraw while dragging: only the selected zone's outline
+  let k = 0;
+  zoneLayer.eachLayer(l => { if (k++ === selected) l.setLatLngs(zones[selected].verts); });
+}
+
+function renderList() {
+  const el = document.getElementById('zonelist');
+  el.innerHTML = '';
+  zones.forEach((z, i) => {
+    const row = document.createElement('div');
+    row.className = 'zrow' + (i === selected ? ' sel' : '');
+    const probs = zoneProblems(z);
+    row.innerHTML =
+      `<span class="sw" style="background:${zoneColor(i)}"></span>` +
+      `<span class="nm">${i + 1}. ${z.name ? esc(z.name) : '(unnamed)'} ` +
+      `<small>${z.verts.length} pts</small>` +
+      (probs.length ? ` <span class="warn" title="${esc(probs.join('; '))}">⚠</span>` : '') +
+      `</span>` +
+      `<button class="small" data-a="up" title="Higher priority">↑</button>` +
+      `<button class="small" data-a="dn" title="Lower priority">↓</button>` +
+      `<button class="small" data-a="zoom" title="Zoom to">⌖</button>` +
+      `<button class="small" data-a="del" title="Delete">✕</button>`;
+    row.addEventListener('click', e => {
+      const a = e.target.dataset && e.target.dataset.a;
+      if (a === 'up' && i > 0) { zones.splice(i - 1, 0, zones.splice(i, 1)[0]); selected = i - 1; }
+      else if (a === 'dn' && i < zones.length - 1) { zones.splice(i + 1, 0, zones.splice(i, 1)[0]); selected = i + 1; }
+      else if (a === 'zoom') { map.fitBounds(L.polygon(z.verts).getBounds().pad(0.3)); select(i); return; }
+      else if (a === 'del') {
+        if (!confirm(`Delete zone "${z.name || '(unnamed)'}"?`)) return;
+        zones.splice(i, 1);
+        if (selected === i) selected = -1; else if (selected > i) selected--;
+      } else { select(i); return; }
+      save(); refresh();
+    });
+    el.appendChild(row);
+  });
+  renderDetail();
+}
+
+function renderDetail() {
+  const d = document.getElementById('detail');
+  if (selected < 0) { d.hidden = true; return; }
+  d.hidden = false;
+  const z = zones[selected];
+  document.getElementById('fName').value = z.name;
+  document.getElementById('fPosix').value = z.posix;
+  const probs = zoneProblems(z);
+  document.getElementById('fInfo').textContent =
+    `${z.verts.length} vertices` + (probs.length ? ' — ⚠ ' + probs.join('; ') : '');
+}
+
+function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
+function select(i) { selected = i; refresh(); }
+function refresh() { renderMap(); renderList(); }
+
+document.getElementById('fName').addEventListener('input', e => {
+  if (selected >= 0) { zones[selected].name = e.target.value; save(); renderList(); }
+});
+document.getElementById('fPosix').addEventListener('input', e => {
+  if (selected >= 0) { zones[selected].posix = e.target.value; save(); renderList(); }
+});
+
+// datalists from reference boxes + zones
+function fillDatalists() {
+  const names = new Set(), posix = new Set();
+  REF_BOXES.forEach(b => { names.add(b[4]); posix.add(b[5]); });
+  zones.forEach(z => { if (z.name) names.add(z.name); if (z.posix) posix.add(z.posix); });
+  document.getElementById('dlNames').innerHTML =
+    [...names].sort().map(n => `<option value="${esc(n)}">`).join('');
+  document.getElementById('dlPosix').innerHTML =
+    [...posix].sort().map(n => `<option value="${esc(n)}">`).join('');
+}
+
+// -------------------------------------------------------------- drawing ----
+const drawbar = document.getElementById('drawbar');
+let drawLine = null;
+
+function startDraw() {
+  cancelModes();
+  mode = 'draw';
+  selected = -1;
+  drawVerts = [];
+  document.body.classList.add('drawing');
+  map.doubleClickZoom.disable();
+  drawbar.style.display = 'flex';
+  updateDrawbar();
+  refresh();
+}
+
+function updateDrawbar() {
+  document.getElementById('drawinfo').textContent =
+    `${drawVerts.length} point${drawVerts.length === 1 ? '' : 's'} — click the map to add, ` +
+    `double-click/Enter to finish, Esc to cancel`;
+  drawLayer.clearLayers();
+  if (drawVerts.length) {
+    drawLine = L.polyline(drawVerts, {color: '#d33', weight: 2}).addTo(drawLayer);
+    if (drawVerts.length > 2)
+      L.polyline([drawVerts[drawVerts.length - 1], drawVerts[0]],
+                 {color: '#d33', weight: 1.5, dashArray: '5 5'}).addTo(drawLayer);
+    drawVerts.forEach(v =>
+      L.circleMarker(v, {radius: 4, color: '#d33', fillColor: '#fff', fillOpacity: 1})
+        .addTo(drawLayer));
+  }
+}
+
+function finishDraw() {
+  if (mode !== 'draw') return;
+  if (drawVerts.length < 3) { alert('A polygon needs at least 3 vertices.'); return; }
+  zones.push({name: '', posix: '', verts: drawVerts});
+  selected = zones.length - 1;
+  endDraw();
+  save(); refresh(); fillDatalists();
+  document.getElementById('fName').focus();
+}
+
+function endDraw() {
+  mode = 'idle';
+  drawVerts = [];
+  drawLayer.clearLayers();
+  drawbar.style.display = 'none';
+  document.body.classList.remove('drawing');
+  setTimeout(() => map.doubleClickZoom.enable(), 100);
+}
+
+function cancelModes() {
+  if (mode === 'draw') endDraw();
+  if (mode === 'probe') toggleProbe(false);
+}
+
+document.getElementById('bNew').addEventListener('click', startDraw);
+document.getElementById('bFinish').addEventListener('click', finishDraw);
+document.getElementById('bCancel').addEventListener('click', endDraw);
+
+map.on('click', e => {
+  if (suppressMapClick) { suppressMapClick = false; return; }
+  if (mode === 'draw') {
+    drawVerts.push([e.latlng.lat, normLng(e.latlng.lng)]);
+    updateDrawbar();
+  } else if (mode === 'probe') {
+    probeAt(e.latlng.lat, normLng(e.latlng.lng));
+  } else {
+    select(-1);
+  }
+});
+map.on('dblclick', () => { if (mode === 'draw') finishDraw(); });
+map.on('mousemove', e => {
+  document.getElementById('status').textContent =
+    `lat ${e.latlng.lat.toFixed(4)}, lon ${normLng(e.latlng.lng).toFixed(4)}` +
+    `  |  ${zones.length} zones  |  autosaved locally`;
+});
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (e.key === 'Escape') { cancelModes(); select(-1); closeModal(); }
+  if (e.key === 'Enter' && mode === 'draw') finishDraw();
+});
+
+// ---------------------------------------------------------------- probe ----
+// Mirrors the firmware exactly: centi-degree integer PNPOLY over the polygon
+// list, then the kZones boxes (float degrees), then the longitude fallback.
+function toCdeg(v) { return v >= 0 ? Math.floor(v * 100 + 0.5) : Math.ceil(v * 100 - 0.5); }
+
+function pointInPoly(la, lo, verts) {
+  let inside = false;
+  const cv = verts.map(v => [toCdeg(v[0]), toCdeg(v[1])]);
+  for (let i = 0, j = cv.length - 1; i < cv.length; j = i++) {
+    const [latI, lonI] = cv[i], [latJ, lonJ] = cv[j];
+    if ((latI > la) === (latJ > la)) continue;
+    const s = (lonJ - lonI) * (la - latI) - (lo - lonI) * (latJ - latI);
+    if (latJ > latI ? s > 0 : s < 0) inside = !inside;
+  }
+  return inside;
+}
+
+function firmwareLookup(lat, lon) {
+  const la = toCdeg(lat), lo = toCdeg(lon);
+  for (let i = 0; i < zones.length; i++) {
+    const z = zones[i];
+    if (z.verts.length < 3) continue;
+    const lats = z.verts.map(v => toCdeg(v[0])), lons = z.verts.map(v => toCdeg(v[1]));
+    if (la < Math.min(...lats) || la > Math.max(...lats) ||
+        lo < Math.min(...lons) || lo > Math.max(...lons)) continue;
+    if (pointInPoly(la, lo, z.verts))
+      return {src: `polygon #${i + 1}`, name: z.name, posix: z.posix};
+  }
+  for (const b of REF_BOXES) {
+    if (lat >= b[0] && lat <= b[1] && lon >= b[2] && lon <= b[3])
+      return {src: 'box table', name: b[4], posix: b[5]};
+  }
+  let h = Math.round(lon / 15);
+  h = Math.max(-12, Math.min(14, h));
+  const name = h === 0 ? 'UTC' : (h > 0 ? `UTC+${h}` : `UTC-${-h}`);
+  const posix = h === 0 ? 'UTC0' : (h > 0 ? `UTC-${h}` : `UTC${-h}`);
+  return {src: 'longitude fallback', name, posix};
+}
+
+function probeAt(lat, lon) {
+  const r = firmwareLookup(lat, lon);
+  L.popup().setLatLng([lat, lon]).setContent(
+    `<b>${esc(r.name)}</b><br><code>${esc(r.posix)}</code><br>` +
+    `<small>via ${r.src} @ ${lat.toFixed(3)}, ${lon.toFixed(3)}</small>`).openOn(map);
+}
+
+function toggleProbe(on) {
+  const want = on !== undefined ? on : mode !== 'probe';
+  if (want && mode === 'draw') endDraw();
+  mode = want ? 'probe' : 'idle';
+  document.getElementById('bProbe').classList.toggle('on', want);
+  if (!want) map.closePopup();
+}
+document.getElementById('bProbe').addEventListener('click', () => toggleProbe());
+
+// ------------------------------------------------------- reference boxes ----
+let boxesShown = false;
+function buildBoxLayer() {
+  boxLayer.clearLayers();
+  REF_BOXES.forEach((b, i) => {
+    const rect = L.rectangle([[b[0], b[2]], [b[1], b[3]]],
+      {color: '#666', weight: 1, fillOpacity: 0.03, dashArray: '4 4'});
+    const div = document.createElement('div');
+    div.innerHTML = `<b>${esc(b[4])}</b><br><code>${esc(b[5])}</code><br>` +
+      `<small>kZones box #${i + 1}</small><br>`;
+    const btn = document.createElement('button');
+    btn.textContent = 'Convert to polygon';
+    btn.addEventListener('click', () => {
+      zones.push({name: b[4], posix: b[5], verts: [
+        [b[0], b[2]], [b[0], b[3]], [b[1], b[3]], [b[1], b[2]]]});
+      selected = zones.length - 1;
+      map.closePopup();
+      save(); refresh(); fillDatalists();
+    });
+    div.appendChild(btn);
+    rect.bindPopup(div);
+    rect.addTo(boxLayer);
+  });
+}
+document.getElementById('bBoxes').addEventListener('click', e => {
+  boxesShown = !boxesShown;
+  e.target.classList.toggle('on', boxesShown);
+  if (boxesShown) { if (!boxLayer.getLayers().length) buildBoxLayer(); boxLayer.addTo(map); }
+  else map.removeLayer(boxLayer);
+});
+
+// ---------------------------------------------------------------- export ----
+function genHeader() {
+  const warns = [];
+  zones.forEach((z, i) => zoneProblems(z).forEach(p =>
+    warns.push(`zone ${i + 1} "${z.name || '(unnamed)'}": ${p}`)));
+
+  const totalVerts = zones.reduce((a, z) => a + z.verts.length, 0);
+  let out = `// TimezonePolyData.h — polygon timezone regions, checked before the box table.
+// GENERATED by tools/tz_polygon_editor.html — regenerate there, don't hand-edit.
+// Load this file back into the editor (Import) to continue editing: the full
+// editor state is embedded in the EDITOR-STATE comment at the bottom.
+//
+// Format: kPolyVerts holds flattened [lat, lon] pairs in centi-degrees
+// (deg * 100, int16, 0.01 deg ~ 1.1 km). Each TzPolyZone references a slice
+// of it plus a precomputed bounding box used as a cheap prefilter. Zones are
+// matched top-down, first hit wins, before the kZones boxes in Timezone.cpp.
+// Polygons must not cross the antimeridian — split them in the editor.
+//
+// ${zones.length} zone${zones.length === 1 ? '' : 's'}, ${totalVerts} vertices, ${totalVerts * 4} bytes of vertex data.
+
+`;
+  if (!zones.length) {
+    out += `static const int16_t kPolyVerts[] = {0};
+
+static const TzPolyZone kPolyZones[] = {
+    {0, 0, 0, 0, 0, 0, "", ""}, // placeholder — no polygons defined
+};
+
+static const unsigned kPolyZoneCount = 0;
+`;
+  } else {
+    out += 'static const int16_t kPolyVerts[] = {\n';
+    let first = 0;
+    const zrows = [];
+    for (const z of zones) {
+      const cv = z.verts.map(v => [toCdeg(v[0]), toCdeg(v[1])]);
+      out += `    // ${z.name || '(unnamed)'} (${cv.length} verts)\n`;
+      const flat = cv.flat();
+      for (let i = 0; i < flat.length; i += 12)
+        out += '    ' + flat.slice(i, i + 12).join(', ') + ',\n';
+      const lats = cv.map(v => v[0]), lons = cv.map(v => v[1]);
+      zrows.push(`    {${Math.min(...lats)}, ${Math.max(...lats)}, ` +
+        `${Math.min(...lons)}, ${Math.max(...lons)}, ${first}, ${cv.length}, ` +
+        `"${z.name}", "${z.posix}"},`);
+      first += cv.length;
+    }
+    out += '};\n\nstatic const TzPolyZone kPolyZones[] = {\n' + zrows.join('\n') +
+      '\n};\n\nstatic const unsigned kPolyZoneCount = ' +
+      'sizeof(kPolyZones) / sizeof(kPolyZones[0]);\n';
+  }
+  out += '\n// EDITOR-STATE: ' + JSON.stringify({version: 1, zones}) + '\n';
+  return {out, warns};
+}
+
+// ---------------------------------------------------------------- import ----
+function doImport(text, merge) {
+  const m = text.match(/EDITOR-STATE:\s*(\{.*\})/);
+  let js = null;
+  if (m) {
+    try { js = JSON.parse(m[1]); } catch (e) { alert('EDITOR-STATE found but unparseable: ' + e); return false; }
+  } else {
+    try { js = JSON.parse(text); } catch (e) { /* not JSON */ }
+  }
+  if (js && Array.isArray(js.zones)) {
+    // merge: imported zones go on top of the list = highest priority
+    zones = merge ? js.zones.concat(zones) : js.zones;
+    selected = -1;
+    save(); refresh(); fillDatalists();
+    alert(`Imported ${js.zones.length} polygon zone(s)` +
+          (merge ? ` on top of the existing ${zones.length - js.zones.length}.` : '.'));
+    return true;
+  }
+  // C++ box lines -> replace the reference layer
+  const pat = /\{\s*(-?[\d.]+)f?\s*,\s*(-?[\d.]+)f?\s*,\s*(-?[\d.]+)f?\s*,\s*(-?[\d.]+)f?\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\}/g;
+  const boxes = [];
+  let mm;
+  while ((mm = pat.exec(text)))
+    boxes.push([+mm[1], +mm[2], +mm[3], +mm[4], mm[5], mm[6]]);
+  if (boxes.length) {
+    REF_BOXES = boxes;
+    buildBoxLayer(); fillDatalists();
+    alert(`Replaced reference box layer with ${boxes.length} boxes from pasted kZones.`);
+    return true;
+  }
+  alert('Nothing recognized: paste a generated TimezonePolyData.h, editor JSON, or kZones box lines.');
+  return false;
+}
+
+// ----------------------------------------------------------------- modal ----
+const modal = document.getElementById('modal');
+let modalMode = 'export';
+
+function openModal(m) {
+  modalMode = m;
+  const T = id => document.getElementById(id);
+  modal.style.display = 'flex';
+  T('mWarns').textContent = '';
+  if (m === 'export') {
+    const {out, warns} = genHeader();
+    T('mTitle').textContent = 'Export TimezonePolyData.h';
+    T('mHelp').textContent = 'Save this as src/TimezonePolyData.h (overwrite) and rebuild. ' +
+      'Keep a copy — Import restores the editor state from it.';
+    T('mText').value = out;
+    T('mWarns').textContent = warns.length ? '⚠ ' + warns.join('  •  ') : '';
+    T('mApply').style.display = 'none';
+    T('mCopy').style.display = T('mDownload').style.display = '';
+    T('mLoad').style.display = 'none';
+    T('mMergeWrap').style.display = 'none';
+  } else {
+    T('mTitle').textContent = 'Import';
+    T('mHelp').textContent = 'Paste a generated TimezonePolyData.h (restores polygons from its ' +
+      'EDITOR-STATE line), editor JSON, or kZones box lines from Timezone.cpp ' +
+      '(refreshes the reference box layer). Or load a file.';
+    T('mText').value = '';
+    T('mApply').style.display = '';
+    T('mCopy').style.display = T('mDownload').style.display = 'none';
+    T('mLoad').style.display = '';
+    T('mMergeWrap').style.display = '';
+  }
+}
+function closeModal() { modal.style.display = 'none'; }
+
+document.getElementById('bExport').addEventListener('click', () => openModal('export'));
+document.getElementById('bImport').addEventListener('click', () => openModal('import'));
+document.getElementById('mClose').addEventListener('click', closeModal);
+document.getElementById('mApply').addEventListener('click', () => {
+  if (doImport(document.getElementById('mText').value,
+               document.getElementById('mMerge').checked)) closeModal();
+});
+document.getElementById('mCopy').addEventListener('click', () => {
+  navigator.clipboard.writeText(document.getElementById('mText').value);
+});
+document.getElementById('mDownload').addEventListener('click', () => {
+  const blob = new Blob([document.getElementById('mText').value], {type: 'text/plain'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'TimezonePolyData.h';
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+document.getElementById('mLoad').addEventListener('click', () =>
+  document.getElementById('mFile').click());
+document.getElementById('mFile').addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => { document.getElementById('mText').value = r.result; };
+  r.readAsText(f);
+  e.target.value = '';
+});
+modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+
+// ----------------------------------------------------------------- init ----
+fillDatalists();
+refresh();
+</script>
+</body>
+</html>

@@ -21,7 +21,13 @@ struct TzResult {
 };
 
 // Look up timezone for coordinates. Always succeeds (longitude fallback).
+// Order: polygon zones (TimezonePolyData.h, drawn with
+// tools/tz_polygon_editor.html), then the bounding-box table, then fallback.
 void tz_lookup(float lat, float lon, TzResult &out);
+
+// Polygon stage only; true if a polygon matched. Exposed for the host tests
+// (a polygon hit is otherwise indistinguishable from the box that backs it).
+bool tz_lookup_poly(float lat, float lon, TzResult &out);
 
 // Offset from UTC in seconds (east positive) for `posix` at UTC time `utc`.
 // If isDst is non-null it receives whether DST is active.

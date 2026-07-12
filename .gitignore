@@ -3,6 +3,8 @@
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
+# Multi-root workspace files reference machine-specific/unrelated folders
+*.code-workspace
 
 # Loose firmware artifacts (if ever built outside .pio)
 *.uf2
