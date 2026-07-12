@@ -238,6 +238,10 @@ static void test_lookup_borders(void) {
   chk(64.2f, -51.7f, -7200, -3600, false, true);   // Nuuk      -2/-1 (Greenland, was fallback)
   chk(14.9f, -23.5f, -3600, -3600, false, false);  // Praia     -1    (Cape Verde, was fallback)
   chk(33.6f, -7.6f, 3600, 3600, false, false);     // Casablanca +1   (Morocco; tzdata Julian rule -> fixed +1)
+  chk(-54.42f, 3.36f, 0, 0, false, false);         // Bouvetøya  UTC+0 (named box; no IANA zone)
+  TzResult bv;
+  tz_lookup(-54.42f, 3.36f, bv);
+  TEST_ASSERT_EQUAL_STRING("Bouvet Island", bv.name); // box label, not fallback "UTC"
 }
 
 // --- polygon lookup ---
