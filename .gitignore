@@ -5,6 +5,9 @@
 .vscode/ipch
 # Multi-root workspace files reference machine-specific/unrelated folders
 *.code-workspace
+# Scratch header the polygon editor exports next to itself; the real generated
+# data lives in src/TimezonePolyData.h
+tools/TimezonePolyData.h
 
 # Loose firmware artifacts (if ever built outside .pio)
 *.uf2
