@@ -19,9 +19,11 @@ void gnss_begin() {
   portb_hiz(GNSS_FON_PORTPIN);
 
   Serial1.begin(9600);
+#ifndef GNSS_SIM
   // RMC+GGA only, 1 Hz. Checksums verified (XOR of payload).
   Serial1.print("$PMTK314,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*28\r\n");
   Serial1.print("$PMTK220,1000*1F\r\n");
+#endif
 }
 
 void gnss_task() {
@@ -69,9 +71,28 @@ bool gnss_get_utc(time_t &utc, uint32_t &ageMs) {
   return true;
 }
 
+#ifdef GNSS_SIM
+// Simulated GNSS: state is driven by the SimConsole, not the L86. gnss_task()
+// still runs (Serial1 is idle), but the fix/pos/utc come from these setters.
+static bool s_simFix = false;
+void gnss_sim_set_fix(float lat, float lon) {
+  s_lat = lat;
+  s_lon = lon;
+  s_havePos = true;
+  s_simFix = true;
+}
+void gnss_sim_clear_fix() { s_simFix = false; }
+void gnss_sim_set_utc(time_t utc) {
+  s_utc = utc;
+  s_utcMs = millis(); // fresh -> ClockKeeper anchors on the next 1 Hz task
+  s_haveUtc = true;
+}
+bool gnss_has_fix() { return s_simFix; }
+#else
 bool gnss_has_fix() {
   return gps.location.isValid() && gps.location.age() < 10000ul;
 }
+#endif
 
 bool gnss_get_position(float &lat, float &lon) {
   if (!s_havePos)

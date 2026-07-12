@@ -29,6 +29,7 @@
 #include "ClockKeeper.h"
 #include "AlarmManager.h"
 #include "Ui.h"
+#include "SimConsole.h"
 
 // Diagnostic: when 1, setup() scans the whole I2C bus and prints every address
 // that ACKs, in a loop over USB serial, instead of booting normally. Set to 0
@@ -177,6 +178,10 @@ void setup() {
 
   alarm_begin();
   alarm_set_callbacks(start_ringing, stop_ringing);
+
+#ifdef GNSS_SIM
+  sim_console_begin(); // env:sim — type coordinates over serial (no real GPS)
+#endif
 }
 
 void loop() {
@@ -184,6 +189,9 @@ void loop() {
   buttons_task();
   accel_task();
   gnss_task();
+#ifdef GNSS_SIM
+  sim_console_task(); // read simulated coordinates from the USB serial console
+#endif
   clock_task();
   storage_task();
   audio_task();

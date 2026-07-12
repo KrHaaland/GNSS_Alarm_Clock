@@ -25,3 +25,12 @@ uint16_t gnss_hdop_x10(); // HDOP * 10, 0xFFFF when unknown
 uint32_t gnss_chars_seen(); // diagnostics: raw NMEA chars processed
 
 void gnss_hw_reset(); // pulse L86 RESET_N (blocks ~110 ms)
+
+#ifdef GNSS_SIM
+// Simulated-GNSS hooks (env:sim / -DGNSS_SIM): the SimConsole feeds position +
+// UTC from the USB serial console instead of the L86, so the timezone/clock
+// pipeline can be exercised on-device without a real fix.
+void gnss_sim_set_fix(float lat, float lon); // set position + report a fix
+void gnss_sim_clear_fix();                    // drop the simulated fix
+void gnss_sim_set_utc(time_t utc);            // seed the UTC clock
+#endif

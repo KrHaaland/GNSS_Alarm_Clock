@@ -146,6 +146,31 @@ openocd -c "adapter driver cmsis-dap" -c "transport select swd" \
 
 `pio device monitor -b 115200` opens the USB-CDC console.
 
+### Simulated GNSS (`env:sim`)
+
+To test the timezone/clock pipeline on-device **without a real fix**, build the
+`sim` env — identical firmware plus `-DGNSS_SIM` (the L86 init is skipped and a
+serial console feeds position/time):
+
+```sh
+pio run -e sim -t upload      # or SWD-flash .pio/build/sim/firmware.bin @0x4000
+pio device monitor -b 115200
+```
+
+Then type commands into the monitor:
+
+```
+pos 59.91 10.75              set a fix; resolves + applies the timezone
+tz  -33.87 151.2             query a zone (Jan/Jul offset + DST), no state change
+utc 2026 7 13 12 0 0         set the UTC clock so local time shows on the display
+status                       print fix / UTC / local time / zone
+nofix                        drop the simulated fix
+```
+
+`pos` also updates the on-screen clock's zone immediately, so you can watch the
+display follow you around the globe. The `sim` code compiles to nothing in the
+normal build — zero production-flash cost.
+
 ## Source layout
 
 | File | Responsibility |
@@ -164,6 +189,7 @@ openocd -c "adapter driver cmsis-dap" -c "transport select swd" \
 | `src/Buttons.*` / `src/Leds.*` | Debounced input, LED section patterns |
 | `src/AmpTPA2016.*` / `src/AccelLIS3DH.*` | Amp gain/enable, double-tap-to-snooze |
 | `src/Settings.*` | Persistent settings in internal flash (emulated EEPROM) |
+| `src/SimConsole.*` | Serial "virtual GPS" console — `env:sim` only (`-DGNSS_SIM`) |
 
 ## Diagnostics (compile-time, default off)
 
