@@ -123,6 +123,18 @@
 <script>
 'use strict';
 
+// The editor needs internet: Leaflet + plugins come from unpkg.com and the base
+// maps are tile servers. If the CDN was unreachable, fail visibly instead of a
+// silent blank page.
+if (typeof L === 'undefined') {
+  document.getElementById('map').innerHTML =
+    '<div style="padding:2em;font:14px/1.5 sans-serif;max-width:40em">' +
+    '<b>Map libraries failed to load.</b><br>The editor needs internet access ' +
+    '(unpkg.com for Leaflet, plus the map tile servers). Check the connection ' +
+    'or any content blocker, then reload.</div>';
+  throw new Error('Leaflet CDN unavailable');
+}
+
 // Snapshot of the kZones box table in src/Timezone.cpp (reference layer only —
 // the boxes themselves stay in Timezone.cpp). Re-import via Import… if the
 // table changes: paste the kZones lines and the layer is replaced.
@@ -178,16 +190,38 @@ const layersCtrl = L.control.layers(baseLayers).addTo(map);
 L.control.scale().addTo(map);
 
 const GKEY_LS = 'tzpolyeditor.gmapskey';
+let googleLayers = null;
 function loadGoogle() {
   const key = localStorage.getItem(GKEY_LS);
   if (!key || window.google) return;
+  // Bad key / disabled billing lands here (Google's global callback). Without
+  // this the Google layer just stops painting — if it was active, the whole
+  // map looked dead. Restore OSM and say what happened.
+  window.gm_authFailure = () => {
+    if (googleLayers) {
+      Object.values(googleLayers).forEach(l => {
+        map.removeLayer(l);
+        layersCtrl.removeLayer(l);
+      });
+      googleLayers = null;
+    }
+    carto.addTo(map);
+    alert('Google rejected the Maps API key (invalid key or billing not ' +
+          'enabled) — switched back to the OSM base map.\n' +
+          'Fix or remove the key with the 🔑 Google button.');
+  };
   window.__gmReady = () => {
-    const road = L.gridLayer.googleMutant({type: 'roadmap'});
-    const hyb  = L.gridLayer.googleMutant({type: 'hybrid'});
-    layersCtrl.addBaseLayer(road, 'Google Maps');
-    layersCtrl.addBaseLayer(hyb, 'Google Hybrid');
-    Object.values(baseLayers).forEach(l => map.removeLayer(l));
-    road.addTo(map);
+    if (!L.gridLayer.googleMutant) {
+      alert('Google Maps loaded but the Leaflet GoogleMutant plugin did not ' +
+            '(unpkg.com blocked?) — staying on the OSM base map.');
+      return;
+    }
+    googleLayers = {road: L.gridLayer.googleMutant({type: 'roadmap'}),
+                    hyb:  L.gridLayer.googleMutant({type: 'hybrid'})};
+    layersCtrl.addBaseLayer(googleLayers.road, 'Google Maps');
+    layersCtrl.addBaseLayer(googleLayers.hyb, 'Google Hybrid');
+    // Register only — keep the current (working) base map on screen. Pick the
+    // Google layers from the layer switcher (top right) when wanted.
   };
   const s = document.createElement('script');
   s.src = 'https://maps.googleapis.com/maps/api/js?key=' +
