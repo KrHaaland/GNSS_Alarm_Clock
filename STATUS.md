@@ -71,6 +71,12 @@ on the RTC (below); it does not stop the clock from working off GNSS.
   400 kHz (board lacks local HF decoupling — HW review #12). Added a gated
   `I2C_SCAN` bus scanner.
 
+**Build targets:** added **SAMD51J20A** envs for the next board revision
+(`metro_m4_j20`, `sim_j20`; custom `boards/samd51j20a_metro.json` +
+`ld/samd51j20a_flash_with_bootloader.ld`, 1 MB/256 KB). Same firmware: J19
+95.2% flash → J20 47.6%. Select via `default_envs` in platformio.ini. J20
+must be SWD-flashed until a J20 UF2 bootloader is built.
+
 **Docs:** README refreshed to current reality; this STATUS report added.
 
 ---

@@ -123,6 +123,27 @@ pio run                      # build (default env: adafruit_metro_m4)
 pio test -e native           # host-side unit tests (timezone/DST engine)
 ```
 
+### MCU select (J19 / J20)
+
+The prototype has a **SAMD51J19A** (512 KB flash, ~95% full); the next revision
+uses a **SAMD51J20A** (1 MB flash, ~48% — same pinout). Pick the build in
+`platformio.ini` (`default_envs`) or per-invocation:
+
+| env | MCU | notes |
+|---|---|---|
+| `adafruit_metro_m4` | J19A 512 KB | default (current prototype) |
+| `metro_m4_j20` | J20A 1 MB | `boards/samd51j20a_metro.json` + `ld/samd51j20a_*.ld` |
+| `sim` / `sim_j20` | either | + serial GNSS simulator (`-DGNSS_SIM`) |
+
+```sh
+pio run -e metro_m4_j20      # J20 build; flash .pio/build/metro_m4_j20/firmware.bin @0x4000
+```
+
+> **J20 bootloader note:** the stock Metro M4 UF2 bootloader is built for the
+> J19 — on a J20 board flash the app **over SWD** (same `.bin @ 0x4000` recipe).
+> For UF2 drag-and-drop on the J20, build
+> [uf2-samdx1](https://github.com/adafruit/uf2-samdx1) for the SAMD51J20A once.
+
 Two flashing paths:
 
 **A) UF2 bootloader (normal, no tools):** double-tap RESET to mount the
