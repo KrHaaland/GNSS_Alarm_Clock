@@ -108,24 +108,11 @@ struct TzOpt {
   const char *posix;
 };
 static const TzOpt TZ_TABLE[] = {
-    // Named zones with DST rules first (a plain GMT offset cannot follow
-    // summer time — prefer these where one fits)...
-    {"Europe/Oslo", "CET-1CEST,M3.5.0,M10.5.0/3"},
-    {"Europe/London", "GMT0BST,M3.5.0/1,M10.5.0"},
-    {"Europe/Helsinki", "EET-2EEST,M3.5.0/3,M10.5.0/4"},
-    {"UTC", "UTC0"},
-    {"US Eastern", "EST5EDT,M3.2.0,M11.1.0"},
-    {"US Central", "CST6CDT,M3.2.0,M11.1.0"},
-    {"US Mountain", "MST7MDT,M3.2.0,M11.1.0"},
-    {"US Pacific", "PST8PDT,M3.2.0,M11.1.0"},
-    {"India", "IST-5:30"},
-    {"China", "CST-8"},
-    {"Japan", "JST-9"},
-    {"Sydney", "AEST-10AEDT,M10.1.0,M4.1.0/3"},
-    // ...then the full fixed-offset ladder, GMT-12..GMT+14 in half-hour steps
-    // plus the three :45 zones (+5.75 Nepal, +8.75 Eucla, +12.75 Chatham-std).
-    // Generated + verified against tz_offset_at; no DST on these.
-{"GMT-12", "<-12>12"},
+    // Manual mode = plain GMT offset picker: GMT-12..GMT+14 in half-hour
+    // steps plus the three :45 zones (+5.75 Nepal, +8.75 Eucla, +12.75
+    // Chatham std). Fixed offsets, no DST — auto (GNSS) mode handles named
+    // zones and summer time. Generated + verified against tz_offset_at().
+    {"GMT-12", "<-12>12"},
     {"GMT-11.5", "<-1130>11:30"},
     {"GMT-11", "<-11>11"},
     {"GMT-10.5", "<-1030>10:30"},
@@ -149,6 +136,7 @@ static const TzOpt TZ_TABLE[] = {
     {"GMT-1.5", "<-0130>1:30"},
     {"GMT-1", "<-01>1"},
     {"GMT-0.5", "<-0030>0:30"},
+    {"GMT", "GMT0"},
     {"GMT+0.5", "<+0030>-0:30"},
     {"GMT+1", "<+01>-1"},
     {"GMT+1.5", "<+0130>-1:30"},
@@ -183,16 +171,62 @@ static const TzOpt TZ_TABLE[] = {
 };
 #define TZ_COUNT (sizeof(TZ_TABLE) / sizeof(TZ_TABLE[0]))
 static const char TZ_OPTS[] =
-    "Europe/Oslo\nEurope/London\nEurope/Helsinki\nUTC\nUS Eastern\n"
-    "US Central\nUS Mountain\nUS Pacific\nIndia\nChina\nJapan\nSydney"
-    "\nGMT-12\nGMT-11.5\nGMT-11\nGMT-10.5\nGMT-10\nGMT-9.5\nGMT-9"
-    "\nGMT-8.5\nGMT-8\nGMT-7.5\nGMT-7\nGMT-6.5\nGMT-6\nGMT-5.5\nGMT-5"
-    "\nGMT-4.5\nGMT-4\nGMT-3.5\nGMT-3\nGMT-2.5\nGMT-2\nGMT-1.5\nGMT-1"
-    "\nGMT-0.5\nGMT+0.5\nGMT+1\nGMT+1.5\nGMT+2\nGMT+2.5\nGMT+3\nGMT+3.5"
-    "\nGMT+4\nGMT+4.5\nGMT+5\nGMT+5.5\nGMT+5.75\nGMT+6\nGMT+6.5\nGMT+7"
-    "\nGMT+7.5\nGMT+8\nGMT+8.5\nGMT+8.75\nGMT+9\nGMT+9.5\nGMT+10"
-    "\nGMT+10.5\nGMT+11\nGMT+11.5\nGMT+12\nGMT+12.5\nGMT+12.75\nGMT+13"
-    "\nGMT+13.5\nGMT+14";
+    "GMT-12\n"
+    "GMT-11.5\n"
+    "GMT-11\n"
+    "GMT-10.5\n"
+    "GMT-10\n"
+    "GMT-9.5\n"
+    "GMT-9\n"
+    "GMT-8.5\n"
+    "GMT-8\n"
+    "GMT-7.5\n"
+    "GMT-7\n"
+    "GMT-6.5\n"
+    "GMT-6\n"
+    "GMT-5.5\n"
+    "GMT-5\n"
+    "GMT-4.5\n"
+    "GMT-4\n"
+    "GMT-3.5\n"
+    "GMT-3\n"
+    "GMT-2.5\n"
+    "GMT-2\n"
+    "GMT-1.5\n"
+    "GMT-1\n"
+    "GMT-0.5\n"
+    "GMT\n"
+    "GMT+0.5\n"
+    "GMT+1\n"
+    "GMT+1.5\n"
+    "GMT+2\n"
+    "GMT+2.5\n"
+    "GMT+3\n"
+    "GMT+3.5\n"
+    "GMT+4\n"
+    "GMT+4.5\n"
+    "GMT+5\n"
+    "GMT+5.5\n"
+    "GMT+5.75\n"
+    "GMT+6\n"
+    "GMT+6.5\n"
+    "GMT+7\n"
+    "GMT+7.5\n"
+    "GMT+8\n"
+    "GMT+8.5\n"
+    "GMT+8.75\n"
+    "GMT+9\n"
+    "GMT+9.5\n"
+    "GMT+10\n"
+    "GMT+10.5\n"
+    "GMT+11\n"
+    "GMT+11.5\n"
+    "GMT+12\n"
+    "GMT+12.5\n"
+    "GMT+12.75\n"
+    "GMT+13\n"
+    "GMT+13.5\n"
+    "GMT+14";
 
 static const char DIM_OPTS[] = "Never\n15 s\n30 s\n1 min\n5 min";
 static const uint16_t DIM_SECONDS[5] = {0, 15, 30, 60, 300};
@@ -777,7 +811,14 @@ static void tz_sync_widgets() {
     lv_obj_remove_state(s_tzAuto, LV_STATE_CHECKED);
     lv_obj_remove_state(s_tzZone, LV_STATE_DISABLED);
   }
+  // Show plain "GMT" when the saved zone (usually an auto/GNSS-derived named
+  // zone with DST) has no exact match in the fixed-offset ladder.
   uint16_t sel = 0;
+  for (uint16_t i = 0; i < TZ_COUNT; i++)
+    if (strcmp(TZ_TABLE[i].name, "GMT") == 0) {
+      sel = i;
+      break;
+    }
   for (uint16_t i = 0; i < TZ_COUNT; i++)
     if (strcmp(settings().tzPosix, TZ_TABLE[i].posix) == 0) {
       sel = i;
