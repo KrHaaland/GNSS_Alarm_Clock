@@ -167,6 +167,17 @@ openocd -c "adapter driver cmsis-dap" -c "transport select swd" \
 
 `pio device monitor -b 115200` opens the USB-CDC console.
 
+### USB identity
+
+The app enumerates as **`1209:0001` — "K. Haaland / GNSS Alarm Clock"**.
+VID `0x1209` belongs to [pid.codes](https://pid.codes) (free USB IDs for
+open-source hardware); `0x0001` is their official **test PID**, fine for
+personal use — register a permanent PID via a pid.codes PR (requires a public,
+OSI-licensed repo) before distributing hardware. Identity lives in
+`boards/samd51j19a_kh.json` / `boards/samd51j20a_metro.json`. Bootloader mode
+(double-tap reset) still enumerates as Adafruit `239A` until a custom
+uf2-samdx1 is built.
+
 ### Simulated GNSS (`env:sim`)
 
 To test the timezone/clock pipeline on-device **without a real fix**, build the
