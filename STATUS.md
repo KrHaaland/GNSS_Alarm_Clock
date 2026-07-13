@@ -122,6 +122,26 @@ See [`HARDWARE_REVIEW.md`](HARDWARE_REVIEW.md). Most relevant:
 
 ---
 
+## 3½. Hardware v2 (planned)
+
+Next board revision, decided so far:
+- **MCU: SAMD51J20A** (1 MB flash / 256 KB RAM) — build targets already in
+  place (`metro_m4_j20`, `sim_j20`).
+- **Li-ion battery replaces the supercaps** — needs USB charging, which is why
+  the firmware now declares **MaxPower 500 mA** (done, verified).
+
+Firmware consequences to prepare when the v2 schematic lands:
+- Charger with **power-path/load-sharing** recommended (e.g. BQ24074/MCP73871
+  class) so the system runs while charging within the USB budget.
+- Replace `CAPGOOD` logic with charger **CHG/PGOOD** status inputs; battery
+  icon/percentage in the UI (ADC divider or fuel gauge).
+- `ALARMPOWER` (LEDs + buzzer + amp) moves to the battery rail — revisit
+  escalation/brightness current budget.
+- **RTC VBACKUP and L86 `V_BCKP` from the battery** — fixes HW-review #10
+  (GNSS cold-start) and makes timekeeping holdover robust in one stroke.
+- Low-battery behavior (dim/limit alarm? shutdown threshold) — TBD.
+- A v2 **uf2-samdx1 bootloader** build (J20 + our pid.codes USB identity).
+
 ## 4. Open FIRMWARE items
 
 **Verify on hardware (behavior already implemented):**
