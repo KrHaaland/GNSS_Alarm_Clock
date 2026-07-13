@@ -108,6 +108,8 @@ struct TzOpt {
   const char *posix;
 };
 static const TzOpt TZ_TABLE[] = {
+    // Named zones with DST rules first (a plain GMT offset cannot follow
+    // summer time — prefer these where one fits)...
     {"Europe/Oslo", "CET-1CEST,M3.5.0,M10.5.0/3"},
     {"Europe/London", "GMT0BST,M3.5.0/1,M10.5.0"},
     {"Europe/Helsinki", "EET-2EEST,M3.5.0/3,M10.5.0/4"},
@@ -120,11 +122,77 @@ static const TzOpt TZ_TABLE[] = {
     {"China", "CST-8"},
     {"Japan", "JST-9"},
     {"Sydney", "AEST-10AEDT,M10.1.0,M4.1.0/3"},
+    // ...then the full fixed-offset ladder, GMT-12..GMT+14 in half-hour steps
+    // plus the three :45 zones (+5.75 Nepal, +8.75 Eucla, +12.75 Chatham-std).
+    // Generated + verified against tz_offset_at; no DST on these.
+{"GMT-12", "<-12>12"},
+    {"GMT-11.5", "<-1130>11:30"},
+    {"GMT-11", "<-11>11"},
+    {"GMT-10.5", "<-1030>10:30"},
+    {"GMT-10", "<-10>10"},
+    {"GMT-9.5", "<-0930>9:30"},
+    {"GMT-9", "<-09>9"},
+    {"GMT-8.5", "<-0830>8:30"},
+    {"GMT-8", "<-08>8"},
+    {"GMT-7.5", "<-0730>7:30"},
+    {"GMT-7", "<-07>7"},
+    {"GMT-6.5", "<-0630>6:30"},
+    {"GMT-6", "<-06>6"},
+    {"GMT-5.5", "<-0530>5:30"},
+    {"GMT-5", "<-05>5"},
+    {"GMT-4.5", "<-0430>4:30"},
+    {"GMT-4", "<-04>4"},
+    {"GMT-3.5", "<-0330>3:30"},
+    {"GMT-3", "<-03>3"},
+    {"GMT-2.5", "<-0230>2:30"},
+    {"GMT-2", "<-02>2"},
+    {"GMT-1.5", "<-0130>1:30"},
+    {"GMT-1", "<-01>1"},
+    {"GMT-0.5", "<-0030>0:30"},
+    {"GMT+0.5", "<+0030>-0:30"},
+    {"GMT+1", "<+01>-1"},
+    {"GMT+1.5", "<+0130>-1:30"},
+    {"GMT+2", "<+02>-2"},
+    {"GMT+2.5", "<+0230>-2:30"},
+    {"GMT+3", "<+03>-3"},
+    {"GMT+3.5", "<+0330>-3:30"},
+    {"GMT+4", "<+04>-4"},
+    {"GMT+4.5", "<+0430>-4:30"},
+    {"GMT+5", "<+05>-5"},
+    {"GMT+5.5", "<+0530>-5:30"},
+    {"GMT+5.75", "<+0545>-5:45"},
+    {"GMT+6", "<+06>-6"},
+    {"GMT+6.5", "<+0630>-6:30"},
+    {"GMT+7", "<+07>-7"},
+    {"GMT+7.5", "<+0730>-7:30"},
+    {"GMT+8", "<+08>-8"},
+    {"GMT+8.5", "<+0830>-8:30"},
+    {"GMT+8.75", "<+0845>-8:45"},
+    {"GMT+9", "<+09>-9"},
+    {"GMT+9.5", "<+0930>-9:30"},
+    {"GMT+10", "<+10>-10"},
+    {"GMT+10.5", "<+1030>-10:30"},
+    {"GMT+11", "<+11>-11"},
+    {"GMT+11.5", "<+1130>-11:30"},
+    {"GMT+12", "<+12>-12"},
+    {"GMT+12.5", "<+1230>-12:30"},
+    {"GMT+12.75", "<+1245>-12:45"},
+    {"GMT+13", "<+13>-13"},
+    {"GMT+13.5", "<+1330>-13:30"},
+    {"GMT+14", "<+14>-14"},
 };
 #define TZ_COUNT (sizeof(TZ_TABLE) / sizeof(TZ_TABLE[0]))
 static const char TZ_OPTS[] =
     "Europe/Oslo\nEurope/London\nEurope/Helsinki\nUTC\nUS Eastern\n"
-    "US Central\nUS Mountain\nUS Pacific\nIndia\nChina\nJapan\nSydney";
+    "US Central\nUS Mountain\nUS Pacific\nIndia\nChina\nJapan\nSydney"
+    "\nGMT-12\nGMT-11.5\nGMT-11\nGMT-10.5\nGMT-10\nGMT-9.5\nGMT-9"
+    "\nGMT-8.5\nGMT-8\nGMT-7.5\nGMT-7\nGMT-6.5\nGMT-6\nGMT-5.5\nGMT-5"
+    "\nGMT-4.5\nGMT-4\nGMT-3.5\nGMT-3\nGMT-2.5\nGMT-2\nGMT-1.5\nGMT-1"
+    "\nGMT-0.5\nGMT+0.5\nGMT+1\nGMT+1.5\nGMT+2\nGMT+2.5\nGMT+3\nGMT+3.5"
+    "\nGMT+4\nGMT+4.5\nGMT+5\nGMT+5.5\nGMT+5.75\nGMT+6\nGMT+6.5\nGMT+7"
+    "\nGMT+7.5\nGMT+8\nGMT+8.5\nGMT+8.75\nGMT+9\nGMT+9.5\nGMT+10"
+    "\nGMT+10.5\nGMT+11\nGMT+11.5\nGMT+12\nGMT+12.5\nGMT+12.75\nGMT+13"
+    "\nGMT+13.5\nGMT+14";
 
 static const char DIM_OPTS[] = "Never\n15 s\n30 s\n1 min\n5 min";
 static const uint16_t DIM_SECONDS[5] = {0, 15, 30, 60, 300};
@@ -1054,22 +1122,29 @@ static void handle_edit_key(const ButtonEvent &ev) {
   bool bm = lv_obj_check_type(f, &lv_buttonmatrix_class);
   bool roller = lv_obj_check_type(f, &lv_roller_class);
 
+  // Long-press B2/B3 = coarse step (big lists like the 67-entry zone
+  // dropdown, 0..255 sliders). Buttons emit Long instead of Short, so the two
+  // rates don't stack. Dropdowns are stepped by queued keys; 5 fits the
+  // 8-deep key queue. Buttonmatrix (weekdays) keeps single steps.
+  bool big = ev.action == BtnAction::Long;
   switch (ev.id) {
   case BtnId::B2: // decrease / previous
     if (slider)
-      slider_step(f, -10);
+      slider_step(f, big ? -50 : -10);
     else if (roller)
-      roller_step(f, -1);
+      roller_step(f, big ? -10 : -1);
     else
-      push_key(LV_KEY_LEFT); // dropdown list / btnmatrix: move left
+      for (int i = 0; i < ((dd && big) ? 5 : 1); i++)
+        push_key(LV_KEY_LEFT); // dropdown list / btnmatrix: move left
     break;
   case BtnId::B3: // increase / next
     if (slider)
-      slider_step(f, +10);
+      slider_step(f, big ? +50 : +10);
     else if (roller)
-      roller_step(f, +1);
+      roller_step(f, big ? +10 : +1);
     else
-      push_key(LV_KEY_RIGHT);
+      for (int i = 0; i < ((dd && big) ? 5 : 1); i++)
+        push_key(LV_KEY_RIGHT);
     break;
   case BtnId::B4:
     if (bm) {
