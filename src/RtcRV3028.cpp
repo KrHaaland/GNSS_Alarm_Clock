@@ -34,14 +34,16 @@ static bool write_reg_raw(uint8_t reg, uint8_t val) {
   return Wire.endTransmission() == 0;
 }
 
-// Poll STATUS.EEBUSY clear; EEPROM byte-write takes ~16 ms worst case.
+// Poll STATUS.EEBUSY clear. Two hard-won bench facts: (1) the chip NACKs I2C
+// entirely while its EEPROM engine runs (e.g. right after ReadSingle), so a
+// failed STATUS read means "still busy" — keep polling, don't bail. (2) the
+// POR auto-refresh at power-on holds EEBUSY well past 100 ms, hence the
+// generous deadline.
 static bool eeprom_wait_ready() {
-  uint32_t deadline = millis() + 100;
+  uint32_t deadline = millis() + 300;
   uint8_t st;
   while ((int32_t)(deadline - millis()) > 0) {
-    if (!read_reg_raw(RV3028_STATUS, st))
-      return false;
-    if (!(st & (1u << STATUS_EEBUSY)))
+    if (read_reg_raw(RV3028_STATUS, st) && !(st & (1u << STATUS_EEBUSY)))
       return true;
   }
   return false;
