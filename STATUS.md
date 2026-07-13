@@ -83,6 +83,13 @@ on the RTC (below); it does not stop the clock from working off GNSS.
 95.2% flash → J20 47.6%. Select via `default_envs` in platformio.ini. J20
 must be SWD-flashed until a J20 UF2 bootloader is built.
 
+**Settings storage moved to the RV-3028 user EEPROM** (packed 39-byte image;
+coordinates instead of TZ strings, tune-name hashes matched against the TUNES
+dir at boot). Survives firmware reflashes — the old FlashStorage emulation sat
+inside the app image and was wiped on every update — and has 4x the write
+endurance. FlashStorage_SAMD dropped (flash 95.6% -> 93.3%); the 24LC512 is
+now unused and **leaves the BOM in hardware v2**.
+
 **Docs:** README refreshed to current reality; this STATUS report added.
 
 ---

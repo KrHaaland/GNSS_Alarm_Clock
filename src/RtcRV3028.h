@@ -16,3 +16,12 @@ bool rtc_set_utc(time_t utc);
 // Power-On Reset flag: true if the RTC lost time (backup drained). Cleared
 // after reading.
 bool rtc_lost_power();
+
+// --- User EEPROM (43 bytes, addresses 0x00..0x2A) ---------------------------
+// Settings live here: survives power loss AND firmware reflashes, ~100k write
+// cycles per byte. Raw I2C (usable before rtc_begin()); ~16 ms per written
+// byte (EEPROM programming time), reads are quick. False on absent chip,
+// out-of-range address, or EEPROM-busy timeout.
+#define RTC_USER_EEPROM_SIZE 43
+bool rtc_eeprom_read(uint8_t addr, uint8_t *buf, uint8_t n);
+bool rtc_eeprom_write(uint8_t addr, const uint8_t *buf, uint8_t n);

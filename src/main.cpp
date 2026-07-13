@@ -130,13 +130,15 @@ void setup() {
   // devices (RTC, accel, EEPROM, amp) work fine at 100 kHz.
   Wire.setClock(100000);
 
-  settings_begin();
-
   // Storage first: it brings up TinyUSB MSC, best done early after boot.
   storage_begin();
   // HID gamepad interface must exist before the host enumerates (descriptors
   // are fixed after that); it stays silent unless MODE_GAME is selected.
   gamepad_begin();
+
+  // After storage (alarm tune names are re-matched against the TUNES
+  // directory) and after Wire (settings live in the RTC's user EEPROM).
+  settings_begin();
 
 #if I2C_SCAN
   // Loop-scan the bus so the result streams over USB serial (delay() services

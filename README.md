@@ -8,10 +8,10 @@ from the GNSS coordinates and saved to flash so it stays correct indoors, and
 alarms drive an LED light-show + a tune through a class-D amp. The UI is LVGL on
 a color TFT driven by four buttons.
 
-> **Current state:** firmware is feature-complete and running on hardware. The
-> display, GNSS time/timezone, alarms, audio, tunes-over-USB and settings all
-> work. One **hardware** issue is open — the RV-3028 RTC does not respond on the
-> I²C bus (bad joint on U5, being reflowed). See [`STATUS.md`](STATUS.md) and
+> **Current state:** firmware is feature-complete and running on hardware —
+> display, GNSS time/timezone, alarms, audio, tunes-over-USB, settings, modes
+> (speedometer/altimeter/USB-gamepad) and the RV-3028 RTC (hand-fitted; it was
+> missing from the prototype) all work. See [`STATUS.md`](STATUS.md) and
 > [`HARDWARE_REVIEW.md`](HARDWARE_REVIEW.md).
 
 ## What it does
@@ -95,9 +95,15 @@ color TFT**. Driver: [`src/DisplayST7789.cpp`](src/DisplayST7789.cpp).
 The board has two candidate "EEPROMs" for tunes: the 24LC512 (64 KB, I²C) and a
 QSPI serial flash. The firmware uses the **QSPI flash** (exposed as the USB
 drive): far larger, faster, on the standard Metro M4 QSPI pins, and it enables
-the drag-and-drop workflow. The 24LC512 is left reserved (still ACKs at 0x50,
-unused). Settings live in **SAMD51 internal flash** (emulated EEPROM), not in
-either chip.
+the drag-and-drop workflow.
+
+**Settings** are packed into the **RV-3028 RTC's 43-byte user EEPROM**
+(39-byte image: coordinates instead of TZ strings, filename hashes instead of
+tune names — see `Settings.cpp`). Chosen because it survives **firmware
+reflashes** (the old internal-flash emulation sat inside the app image and was
+wiped on every update), takes ~100k writes/byte, and frees the **24LC512 to be
+dropped from the hardware-v2 BOM** (it still ACKs at 0x50 on v1 boards,
+unused).
 
 > **Flash BOM note:** the schematic specifies a 4 MB Macronix MX25L3233F, but
 > assembled boards carry a **16 MB Winbond W25Q128** (JEDEC 0xEF4018). The driver

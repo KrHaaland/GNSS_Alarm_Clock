@@ -26,6 +26,80 @@ static bool read_reg_raw(uint8_t reg, uint8_t &val) {
   return true;
 }
 
+// Raw register write; usable before rtc.begin().
+static bool write_reg_raw(uint8_t reg, uint8_t val) {
+  Wire.beginTransmission((uint8_t)RV3028_ADDR);
+  Wire.write(reg);
+  Wire.write(val);
+  return Wire.endTransmission() == 0;
+}
+
+// Poll STATUS.EEBUSY clear; EEPROM byte-write takes ~16 ms worst case.
+static bool eeprom_wait_ready() {
+  uint32_t deadline = millis() + 100;
+  uint8_t st;
+  while ((int32_t)(deadline - millis()) > 0) {
+    if (!read_reg_raw(RV3028_STATUS, st))
+      return false;
+    if (!(st & (1u << STATUS_EEBUSY)))
+      return true;
+  }
+  return false;
+}
+
+// Set/clear CTRL1.EERD (auto-refresh must be off during user-EEPROM access).
+static bool eeprom_set_eerd(bool on) {
+  uint8_t c1;
+  if (!read_reg_raw(RV3028_CTRL1, c1))
+    return false;
+  if (on)
+    c1 |= (1u << CTRL1_EERD);
+  else
+    c1 &= ~(1u << CTRL1_EERD);
+  return write_reg_raw(RV3028_CTRL1, c1);
+}
+
+// One user-EEPROM byte op: cmd = EEPROMCMD_ReadSingle / _WriteSingle.
+static bool eeprom_byte_op(uint8_t cmd, uint8_t addr, uint8_t &data) {
+  if (!eeprom_wait_ready())
+    return false;
+  if (!write_reg_raw(RV3028_EEPROM_ADDR, addr))
+    return false;
+  if (cmd == EEPROMCMD_WriteSingle && !write_reg_raw(RV3028_EEPROM_DATA, data))
+    return false;
+  // Command register: "first command" 0x00, then the actual op.
+  if (!write_reg_raw(RV3028_EEPROM_CMD, EEPROMCMD_First) ||
+      !write_reg_raw(RV3028_EEPROM_CMD, cmd))
+    return false;
+  if (!eeprom_wait_ready())
+    return false;
+  if (cmd == EEPROMCMD_ReadSingle && !read_reg_raw(RV3028_EEPROM_DATA, data))
+    return false;
+  return true;
+}
+
+static bool eeprom_span(bool write, uint8_t addr, uint8_t *buf, uint8_t n) {
+  if (!rtc_probe() || (uint16_t)addr + n > RTC_USER_EEPROM_SIZE)
+    return false;
+  if (!eeprom_set_eerd(true))
+    return false;
+  bool ok = true;
+  for (uint8_t i = 0; i < n && ok; i++)
+    ok = eeprom_byte_op(write ? EEPROMCMD_WriteSingle : EEPROMCMD_ReadSingle,
+                        (uint8_t)(addr + i), buf[i]);
+  eeprom_set_eerd(false); // re-enable auto refresh regardless
+  eeprom_wait_ready();
+  return ok;
+}
+
+bool rtc_eeprom_read(uint8_t addr, uint8_t *buf, uint8_t n) {
+  return eeprom_span(false, addr, buf, n);
+}
+
+bool rtc_eeprom_write(uint8_t addr, const uint8_t *buf, uint8_t n) {
+  return eeprom_span(true, addr, (uint8_t *)buf, n);
+}
+
 bool rtc_begin() {
   s_present = rtc_probe();
   if (!s_present)

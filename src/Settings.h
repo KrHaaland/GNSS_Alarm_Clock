@@ -1,10 +1,12 @@
-// Settings.h — persistent device settings in SAMD51 internal flash
-// (FlashStorage_SAMD emulated EEPROM). Survives reboot and power loss.
+// Settings.h — persistent device settings, packed into the RV-3028 RTC's
+// 43-byte user EEPROM (see Settings.cpp for the packed format). Survives
+// reboot, power loss AND firmware reflashes; ~100k writes/byte endurance.
+// This RAM struct keeps the friendly layout the rest of the firmware uses.
 #pragma once
 #include <Arduino.h>
 
-#define SETTINGS_MAGIC 0x474E4143u // "GNAC"
-#define SETTINGS_VERSION 3 // v3: snooze shame counters (v2->v3 migrates in place)
+#define SETTINGS_MAGIC 0x474E4143u // "GNAC" (RAM-struct identity only)
+#define SETTINGS_VERSION 3
 
 // Main-screen mode: what the home screen shows / how inputs behave. The alarm
 // engine keeps running regardless of mode. MODE_GAME turns the LIS3DH into a
