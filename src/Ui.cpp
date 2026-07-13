@@ -1092,12 +1092,15 @@ static void refresh_sysinfo(bool force) {
            "Offset %c%02lu:%02lu%s\n"
            "GNSS sync %s   RTC %s\n"
            "Caps %s\n"
+           "Snoozed %u this week, %lu total\n"
            "FW " UI_FW_VERSION " " __DATE__,
            gnss_has_fix() ? "yes" : "no", (unsigned)gnss_num_sats(), hdop, lat,
            lon, spd, alt, settings().tzName, settings().tzPosix, sign,
            (unsigned long)(ao / 3600), (unsigned long)((ao % 3600) / 60),
            clock_is_dst() ? " DST" : "", age, rtc_present() ? "ok" : "MISSING",
-           supercaps_ready() ? "ready" : "charging");
+           supercaps_ready() ? "ready" : "charging",
+           (unsigned)alarm_snoozes_this_week(),
+           (unsigned long)settings().snoozeTotal);
   if (force || strcmp(s_cSys, b) != 0) {
     snprintf(s_cSys, sizeof(s_cSys), "%s", b);
     lv_label_set_text(s_sysLabel, b);
@@ -1425,6 +1428,15 @@ void ui_show_ringing(int8_t alarmIndex) {
   char hm[12];
   fmt_hm(hm, sizeof(hm), a.hour, a.minute);
   lv_label_set_text(s_rgTime, hm);
+
+  // Snooze shame: rub this week's count in while deciding.
+  uint16_t shame = alarm_snoozes_this_week();
+  if (shame > 0)
+    lv_label_set_text_fmt(s_rgHint,
+                          "press = snooze (%ux this week!)   hold = stop",
+                          (unsigned)shame);
+  else
+    lv_label_set_text_static(s_rgHint, "press = snooze    hold = stop");
 
   s_dimmed = false;
   display_set_contrast(settings().brightness); // full brightness while ringing

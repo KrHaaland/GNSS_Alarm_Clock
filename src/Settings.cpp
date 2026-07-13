@@ -53,7 +53,16 @@ void settings_defaults() {
 void settings_begin() {
   EEPROM.setCommitASAP(false); // batch writes; commit explicitly in save()
   EEPROM.get(0, s);
-  if (s.magic != SETTINGS_MAGIC || s.version != SETTINGS_VERSION) {
+  if (s.magic == SETTINGS_MAGIC && s.version == 2) {
+    // v2 -> v3: the snooze counters were APPENDED to the struct, so the bytes
+    // just read into them are stale flash. Zero them, stamp the version, and
+    // keep everything the user configured.
+    s.snoozeTotal = 0;
+    s.snoozeWeek = 0;
+    s.snoozeWeekStart = 0;
+    s.version = SETTINGS_VERSION;
+    settings_save();
+  } else if (s.magic != SETTINGS_MAGIC || s.version != SETTINGS_VERSION) {
     settings_defaults();
     settings_save();
   } else {

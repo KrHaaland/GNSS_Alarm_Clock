@@ -100,11 +100,43 @@ void alarm_task() {
   }
 }
 
+// Local epoch-day of the current week's Monday (weeks run Mon..Sun).
+static uint32_t week_monday_day() {
+  time_t lt = clock_now_local();
+  int y, mo, d, h, mi, se, wd;
+  epoch_to_tm(lt, y, mo, d, h, mi, se, wd); // wd: 0 = Sunday
+  uint32_t today = (uint32_t)(lt / 86400);
+  return today - (uint32_t)((wd + 6) % 7); // days since Monday
+}
+
+// The shame counter: every snooze is recorded, per week and all-time.
+static void snooze_shame_bump() {
+  Settings &st = settings();
+  if (clock_valid()) {
+    uint32_t monday = week_monday_day();
+    if (st.snoozeWeekStart != monday) { // new week, fresh shame
+      st.snoozeWeekStart = monday;
+      st.snoozeWeek = 0;
+    }
+  }
+  st.snoozeTotal++;
+  st.snoozeWeek++;
+  settings_save();
+}
+
+uint16_t alarm_snoozes_this_week() {
+  const Settings &st = settings();
+  if (clock_valid() && st.snoozeWeekStart != week_monday_day())
+    return 0; // stored count is from an older week
+  return st.snoozeWeek;
+}
+
 void alarm_snooze() {
   if (s_state != AlarmState::Ringing)
     return;
   s_state = AlarmState::Snoozed;
   s_snoozeUntil = clock_now_local() + (time_t)settings().snoozeMinutes * 60;
+  snooze_shame_bump();
   if (s_onSilence)
     s_onSilence();
 }

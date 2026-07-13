@@ -4,7 +4,7 @@
 #include <Arduino.h>
 
 #define SETTINGS_MAGIC 0x474E4143u // "GNAC"
-#define SETTINGS_VERSION 2 // v2: added Settings::mode (main-screen mode)
+#define SETTINGS_VERSION 3 // v3: snooze shame counters (v2->v3 migrates in place)
 
 // Main-screen mode: what the home screen shows / how inputs behave. The alarm
 // engine keeps running regardless of mode. MODE_GAME turns the LIS3DH into a
@@ -54,6 +54,12 @@ struct Settings {
   uint8_t brightness;      // display contrast 0..255
   uint16_t dimTimeoutS;    // dim display after N s idle, 0 = never
   uint8_t dimBrightness;   // contrast when dimmed
+
+  // Snooze shame counter (appended in v3 — settings_begin() migrates v2
+  // blocks in place, so nothing else is reset).
+  uint32_t snoozeTotal;     // all-time snooze count
+  uint16_t snoozeWeek;      // snoozes in the week starting snoozeWeekStart
+  uint32_t snoozeWeekStart; // local epoch-day of that week's Monday
 };
 
 // Loads settings from flash; installs sane defaults (and saves them) when the
