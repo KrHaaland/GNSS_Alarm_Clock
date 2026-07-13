@@ -528,8 +528,7 @@ static void refresh_clock(bool force) {
 
     if (mode == MODE_GAME) {
       set_label_if(s_ckBottom, s_cBottom, sizeof(s_cBottom),
-                   "USB gamepad: tilt = stick, B2-B4 = buttons, B1 = menu",
-                   force);
+                   "tilt=stick  B2-B4=btns  B1=menu", force);
       return;
     }
   }

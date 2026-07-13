@@ -232,7 +232,7 @@ static const TzBox kZones[] = {
     // Bouvetøya: no IANA zone (uninhabited Norwegian dependency); UTC+0 per
     // its longitude (3.4E solar band). Named so the display beats the "UTC+0"
     // fallback label.
-    {-54.6f, -54.2f, 3.1f, 3.6f, "Bouvet Island", "GMT0"},
+    {-54.6f, -54.2f, 3.1f, 3.6f, "Atlantic/Bouvet", "GMT0"},
     {36.8f, 39.9f, -31.4f, -24.7f, "Atlantic/Azores", "<-01>1<+00>,M3.5.0/0,M10.5.0/1"},
     {32.3f, 33.2f, -17.4f, -16.2f, "Atlantic/Madeira", "WET0WEST,M3.5.0/1,M10.5.0"},
     {27.5f, 29.5f, -18.3f, -13.3f, "Atlantic/Canary", "WET0WEST,M3.5.0/1,M10.5.0"},
