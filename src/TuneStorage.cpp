@@ -137,7 +137,10 @@ bool storage_begin(void) {
   if (!flash.begin(&tune_flash_device, 1))
     return false;
 
-  usb_msc.setID("MarnaEng", "GNSS Alarm Clock", "1.0");
+  // SCSI INQUIRY identity (what Windows shows for the disk device):
+  // vendor max 8 chars, product max 16. "KH" + "GNSS Alarm Clock" reads as
+  // "KH GNSS Alarm Clock USB Device" in Device Manager.
+  usb_msc.setID("KH", "GNSS Alarm Clock", "1.0");
   usb_msc.setReadWriteCallback(msc_read_cb, msc_write_cb, msc_flush_cb);
   usb_msc.setCapacity(flash.size() / 512, 512);
   usb_msc.setUnitReady(true);
