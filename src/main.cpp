@@ -30,6 +30,7 @@
 #include "AlarmManager.h"
 #include "Ui.h"
 #include "SimConsole.h"
+#include "UsbGamepad.h"
 
 // Diagnostic: when 1, setup() scans the whole I2C bus and prints every address
 // that ACKs, in a loop over USB serial, instead of booting normally. Set to 0
@@ -133,6 +134,9 @@ void setup() {
 
   // Storage first: it brings up TinyUSB MSC, best done early after boot.
   storage_begin();
+  // HID gamepad interface must exist before the host enumerates (descriptors
+  // are fixed after that); it stays silent unless MODE_GAME is selected.
+  gamepad_begin();
 
 #if I2C_SCAN
   // Loop-scan the bus so the result streams over USB serial (delay() services
@@ -203,6 +207,7 @@ void loop() {
 
   dispatch_buttons();
   ui_task();
+  gamepad_task(); // HID reports while in MODE_GAME (tilt + B2..B4)
 
   lv_timer_handler();
 }

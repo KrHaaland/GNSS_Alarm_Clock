@@ -33,4 +33,5 @@ void gnss_hw_reset(); // pulse L86 RESET_N (blocks ~110 ms)
 void gnss_sim_set_fix(float lat, float lon); // set position + report a fix
 void gnss_sim_clear_fix();                    // drop the simulated fix
 void gnss_sim_set_utc(time_t utc);            // seed the UTC clock
+void gnss_sim_set_motion(float kmph, float altM); // feed speed/altitude
 #endif

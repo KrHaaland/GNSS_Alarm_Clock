@@ -4,7 +4,14 @@
 #include <Arduino.h>
 
 #define SETTINGS_MAGIC 0x474E4143u // "GNAC"
-#define SETTINGS_VERSION 1
+#define SETTINGS_VERSION 2 // v2: added Settings::mode (main-screen mode)
+
+// Main-screen mode: what the home screen shows / how inputs behave. The alarm
+// engine keeps running regardless of mode. MODE_GAME turns the LIS3DH into a
+// USB HID gamepad (tilt = stick, B2..B4 = buttons; B1 keeps its menu role).
+enum : uint8_t {
+  MODE_CLOCK = 0, MODE_SPEED = 1, MODE_ALT = 2, MODE_GAME = 3, MODE_COUNT = 4
+};
 #define NUM_ALARMS 2
 #define TUNE_NAME_LEN 32
 #define TZ_POSIX_LEN 48
@@ -43,6 +50,7 @@ struct Settings {
   bool tapSnooze;         // LIS3DH tap = snooze while ringing
 
   bool use24h;
+  uint8_t mode;            // main-screen mode (MODE_CLOCK/SPEED/ALT)
   uint8_t brightness;      // display contrast 0..255
   uint16_t dimTimeoutS;    // dim display after N s idle, 0 = never
   uint8_t dimBrightness;   // contrast when dimmed

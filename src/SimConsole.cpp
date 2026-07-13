@@ -136,6 +136,7 @@ static void help() {
   Serial.println("  pos <lat> <lon>              set fix, resolve + apply timezone");
   Serial.println("  tz  <lat> <lon>              query timezone only (no change)");
   Serial.println("  utc <Y> <M> <D> <h> <m> <s>  set UTC clock");
+  Serial.println("  mov <kmh> [altM]             feed speed/altitude (modes)");
   Serial.println("  status                       show sim state + local time");
   Serial.println("  nofix                        clear the simulated fix");
   Serial.println("  help                         this list");
@@ -183,6 +184,21 @@ static void handle(char *line) {
     fmt_dt(e, b, sizeof(b));
     Serial.print("[sim] UTC set ");
     Serial.println(b);
+  } else if (!strcmp(cmd, "mov")) {
+    char *a = strtok(NULL, " \t,");
+    char *bb = strtok(NULL, " \t,");
+    if (!a) {
+      Serial.println("usage: mov <kmh> [altM]");
+      return;
+    }
+    float kmh = parse_deg(a);
+    float alt = bb ? parse_deg(bb) : 0.0f;
+    gnss_sim_set_motion(kmh, alt);
+    Serial.print("[sim] speed ");
+    Serial.print(a);
+    Serial.print(" km/h, alt ");
+    Serial.print(bb ? bb : "0");
+    Serial.println(" m (needs a fix: use 'pos' too)");
   } else if (!strcmp(cmd, "nofix")) {
     gnss_sim_clear_fix();
     Serial.println("[sim] fix cleared");

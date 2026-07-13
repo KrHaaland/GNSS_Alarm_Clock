@@ -55,6 +55,13 @@ a color TFT driven by four buttons.
   buttons above the display: `[Back/Menu] [Prev/–] [Next/+] [OK]`. Screens:
   clock, menu, alarm-edit, time & zone, display, tunes, system-info, ringing.
   A true-black theme keeps the panel dark.
+- **Modes** (Menu → Mode, cycles in place; alarms keep working in all of them):
+  - **Alarm clock** — the normal HH:MM face.
+  - **Speedometer** — the big figure shows GNSS ground speed in **km/h**.
+  - **Altimeter** — GNSS altitude in **m** (MSL).
+  - **Game mode** — the LIS3DH becomes a **USB HID gamepad**: tilt = stick
+    X/Y, B2–B4 = buttons 1–3 (B1 keeps its menu role). The HID interface is
+    always in the descriptor; it only sends reports in this mode.
 - **Tune upload**: the QSPI flash appears as a **USB flash drive** (`TUNES`) —
   drag & drop `.wav` files (PCM, 8/16-bit, mono/stereo, 8–48 kHz).
 

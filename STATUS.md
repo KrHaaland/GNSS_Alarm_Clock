@@ -62,6 +62,12 @@ on the RTC (below); it does not stop the clock from working off GNSS.
 
 **UI:**
 - Clock face: **centered HH:MM, seconds removed**.
+- **Mode selector** (Menu → Mode, cycles in place; settings **v2** — stored
+  settings reset once on first boot): Alarm clock / **Speedometer** (GNSS
+  km/h as the big figure) / **Altimeter** (GNSS m) / **Game mode** (LIS3DH as
+  a USB HID gamepad: tilt = stick, B2–B4 = buttons, B1 = menu; HID interface
+  always enumerated, silent outside the mode). Alarms fire in every mode.
+  Sim console gained `mov <kmh> [altM]` to exercise the GNSS modes indoors.
 - **Shake / tap to wake** — new `accel_moved()` (motion delta on the LIS3DH)
   restores full brightness / resets the dim timer, like a button press.
   Sensitivity `MOVE_THRESHOLD` (~0.6 g) is tunable on the bench.

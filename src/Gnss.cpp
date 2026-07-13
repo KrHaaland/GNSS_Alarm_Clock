@@ -75,6 +75,7 @@ bool gnss_get_utc(time_t &utc, uint32_t &ageMs) {
 // Simulated GNSS: state is driven by the SimConsole, not the L86. gnss_task()
 // still runs (Serial1 is idle), but the fix/pos/utc come from these setters.
 static bool s_simFix = false;
+static float s_simKmph = 0.0f, s_simAltM = 0.0f;
 void gnss_sim_set_fix(float lat, float lon) {
   s_lat = lat;
   s_lon = lon;
@@ -86,6 +87,10 @@ void gnss_sim_set_utc(time_t utc) {
   s_utc = utc;
   s_utcMs = millis(); // fresh -> ClockKeeper anchors on the next 1 Hz task
   s_haveUtc = true;
+}
+void gnss_sim_set_motion(float kmph, float altM) {
+  s_simKmph = kmph;
+  s_simAltM = altM;
 }
 bool gnss_has_fix() { return s_simFix; }
 #else
@@ -102,6 +107,21 @@ bool gnss_get_position(float &lat, float &lon) {
   return true;
 }
 
+#ifdef GNSS_SIM
+bool gnss_get_speed_kmph(float &kmph) {
+  if (!s_simFix)
+    return false;
+  kmph = s_simKmph;
+  return true;
+}
+
+bool gnss_get_altitude_m(float &meters) {
+  if (!s_simFix)
+    return false;
+  meters = s_simAltM;
+  return true;
+}
+#else
 bool gnss_get_speed_kmph(float &kmph) {
   if (!gnss_has_fix() || !gps.speed.isValid())
     return false;
@@ -115,6 +135,7 @@ bool gnss_get_altitude_m(float &meters) {
   meters = (float)gps.altitude.meters();
   return true;
 }
+#endif
 
 uint8_t gnss_num_sats() {
   if (!gps.satellites.isValid())

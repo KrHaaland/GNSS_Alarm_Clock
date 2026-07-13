@@ -12,3 +12,6 @@ bool accel_present();
 bool accel_tapped();
 // True once per detected motion/shake (cleared on read). Wakes the display.
 bool accel_moved();
+// Last raw acceleration sample in m/s^2 (updated by accel_task at ~50 Hz).
+// False until the first sample. Used by the game-mode USB gamepad (tilt).
+bool accel_get(float &x, float &y, float &z);

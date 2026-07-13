@@ -86,3 +86,12 @@ bool accel_moved() {
   movedFlag = false;
   return m;
 }
+
+bool accel_get(float &x, float &y, float &z) {
+  if (!s_haveAccel)
+    return false;
+  x = s_ax;
+  y = s_ay;
+  z = s_az;
+  return true;
+}

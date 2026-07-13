@@ -60,11 +60,12 @@ static lv_obj_t *s_scr[8]; // indexed by UiScreen
 static lv_obj_t *s_ckStatL, *s_ckStatR;
 static lv_obj_t *s_ckBig, *s_ckSec, *s_ckAmpm, *s_ckBottom;
 static char s_cStatL[24], s_cStatR[24];
-static char s_cBig[12], s_cSec[8], s_cAmpm[4], s_cBottom[72];
+static char s_cBig[12], s_cSec[8], s_cAmpm[8], s_cBottom[72];
 
 // Menu
-static lv_obj_t *s_fMenu[8];
-static lv_obj_t *s_tapLabel; // "Tap snooze: On/Off" toggle item label
+static lv_obj_t *s_fMenu[9];
+static lv_obj_t *s_tapLabel;  // "Tap snooze: On/Off" toggle item label
+static lv_obj_t *s_modeLabel; // "Mode: ..." cycle item label
 
 // AlarmEdit
 static int8_t s_alarmIdx;
@@ -491,10 +492,54 @@ static void refresh_clock(bool force) {
     }
   set_label_if(s_ckStatR, s_cStatR, sizeof(s_cStatR), b, force);
 
+  // Big figure + small side label per mode. Modes other than the clock render
+  // first and fall through only for the bottom (date/alarm) line.
+  const uint8_t mode = settings().mode;
+  if (mode != MODE_CLOCK) {
+    char big[12];
+    const char *side = "";
+    if (mode == MODE_SPEED || mode == MODE_ALT) {
+      side = (mode == MODE_SPEED) ? "km/h" : "m";
+      float v;
+      bool ok = (mode == MODE_SPEED) ? gnss_get_speed_kmph(v)
+                                     : gnss_get_altitude_m(v);
+      if (!ok) {
+        strcpy(big, "---"); // no fix (yet)
+      } else if (mode == MODE_SPEED) {
+        unsigned s10 = (unsigned)(v * 10.0f + 0.5f);
+        if (s10 >= 1000) // >=100 km/h: drop the decimal, keep it narrow
+          snprintf(big, sizeof(big), "%u", s10 / 10u);
+        else
+          snprintf(big, sizeof(big), "%u.%u", s10 / 10u, s10 % 10u);
+      } else {
+        int m = (int)(v >= 0.0f ? v + 0.5f : v - 0.5f);
+        snprintf(big, sizeof(big), "%d", m);
+      }
+    } else { // MODE_GAME: UsbGamepad streams HID reports; just say so
+      strcpy(big, "GAME");
+    }
+    bool bigChanged = force || strcmp(s_cBig, big) != 0;
+    set_label_if(s_ckBig, s_cBig, sizeof(s_cBig), big, force);
+    if (bigChanged) {
+      lv_obj_update_layout(s_ckBig);
+      lv_obj_align_to(s_ckAmpm, s_ckBig, LV_ALIGN_OUT_RIGHT_TOP, 3, 10);
+    }
+    set_label_if(s_ckAmpm, s_cAmpm, sizeof(s_cAmpm), side, force);
+
+    if (mode == MODE_GAME) {
+      set_label_if(s_ckBottom, s_cBottom, sizeof(s_cBottom),
+                   "USB gamepad: tilt = stick, B2-B4 = buttons, B1 = menu",
+                   force);
+      return;
+    }
+  }
+
   if (!clock_valid()) {
-    set_label_if(s_ckBig, s_cBig, sizeof(s_cBig), "--:--", force);
-    set_label_if(s_ckSec, s_cSec, sizeof(s_cSec), "", force);
-    set_label_if(s_ckAmpm, s_cAmpm, sizeof(s_cAmpm), "", force);
+    if (mode == MODE_CLOCK) {
+      set_label_if(s_ckBig, s_cBig, sizeof(s_cBig), "--:--", force);
+      set_label_if(s_ckSec, s_cSec, sizeof(s_cSec), "", force);
+      set_label_if(s_ckAmpm, s_cAmpm, sizeof(s_cAmpm), "", force);
+    }
     set_label_if(s_ckBottom, s_cBottom, sizeof(s_cBottom),
                  "waiting for time...", force);
     return;
@@ -504,23 +549,25 @@ static void refresh_clock(bool force) {
   int y, mo, d, h, mi, se, wd;
   epoch_to_tm(lt, y, mo, d, h, mi, se, wd);
 
-  int dh = h;
-  const char *ampm = "";
-  if (!settings().use24h) {
-    ampm = (h < 12) ? "AM" : "PM";
-    dh = h % 12;
-    if (dh == 0)
-      dh = 12;
-  }
-  snprintf(b, sizeof(b), settings().use24h ? "%02d:%02d" : "%d:%02d", dh, mi);
-  bool bigChanged = force || strcmp(s_cBig, b) != 0;
-  set_label_if(s_ckBig, s_cBig, sizeof(s_cBig), b, force);
-  if (bigChanged) { // width may change -> re-anchor the AM/PM tag
-    lv_obj_update_layout(s_ckBig);
-    lv_obj_align_to(s_ckAmpm, s_ckBig, LV_ALIGN_OUT_RIGHT_TOP, 3, 10);
+  if (mode == MODE_CLOCK) {
+    int dh = h;
+    const char *ampm = "";
+    if (!settings().use24h) {
+      ampm = (h < 12) ? "AM" : "PM";
+      dh = h % 12;
+      if (dh == 0)
+        dh = 12;
+    }
+    snprintf(b, sizeof(b), settings().use24h ? "%02d:%02d" : "%d:%02d", dh, mi);
+    bool bigChanged = force || strcmp(s_cBig, b) != 0;
+    set_label_if(s_ckBig, s_cBig, sizeof(s_cBig), b, force);
+    if (bigChanged) { // width may change -> re-anchor the AM/PM tag
+      lv_obj_update_layout(s_ckBig);
+      lv_obj_align_to(s_ckAmpm, s_ckBig, LV_ALIGN_OUT_RIGHT_TOP, 3, 10);
+    }
+    set_label_if(s_ckAmpm, s_cAmpm, sizeof(s_cAmpm), ampm, force);
   }
   (void)se; // seconds are intentionally not displayed
-  set_label_if(s_ckAmpm, s_cAmpm, sizeof(s_cAmpm), ampm, force);
 
   int n = snprintf(b, sizeof(b), "%s %02d %s %04d", DAY_ABBR[wd], d,
                    MON_ABBR[(mo - 1) % 12], y);
@@ -574,13 +621,23 @@ static void make_clock() {
 // ------------------------------------------------------------- Menu scr ---
 enum : uint8_t {
   MENU_ALARM1, MENU_ALARM2, MENU_TZ, MENU_DISPLAY, MENU_TUNES, MENU_SYSINFO,
-  MENU_TAPSNOOZE, MENU_BACK
+  MENU_TAPSNOOZE, MENU_MODE, MENU_BACK
 };
+#define MENU_COUNT 9
 
 static void menu_refresh_tapsnooze() {
   if (s_tapLabel)
     lv_label_set_text_fmt(s_tapLabel, "Tap snooze: %s",
                           settings().tapSnooze ? "On" : "Off");
+}
+
+static const char *const MODE_NAMES[MODE_COUNT] = {"Alarm clock", "Speedometer",
+                                                   "Altimeter", "Game mode"};
+
+static void menu_refresh_mode() {
+  if (s_modeLabel)
+    lv_label_set_text_fmt(s_modeLabel, "Mode: %s",
+                          MODE_NAMES[settings().mode % MODE_COUNT]);
 }
 
 static void menu_btn_cb(lv_event_t *e) {
@@ -596,6 +653,11 @@ static void menu_btn_cb(lv_event_t *e) {
     settings().tapSnooze = !settings().tapSnooze;
     settings_save();
     menu_refresh_tapsnooze();
+    break;
+  case MENU_MODE: // cycle clock/speed/altitude/game in place
+    settings().mode = (uint8_t)((settings().mode + 1) % MODE_COUNT);
+    settings_save();
+    menu_refresh_mode();
     break;
   default:           load_screen(SCR_CLOCK); break;
   }
@@ -621,15 +683,17 @@ static void make_menu() {
   lv_obj_set_style_pad_all(list, 0, 0);
   lv_obj_set_style_border_width(list, 0, 0);
 
-  static const char *const NAMES[8] = {"Alarm 1",  "Alarm 2",    "Time & zone",
-                                       "Display",  "Tunes",      "System info",
-                                       "Tap snooze", "Back"};
-  for (uint8_t i = 0; i < 8; i++)
+  static const char *const NAMES[MENU_COUNT] = {
+      "Alarm 1", "Alarm 2",    "Time & zone", "Display", "Tunes",
+      "System info", "Tap snooze", "Mode",    "Back"};
+  for (uint8_t i = 0; i < MENU_COUNT; i++)
     s_fMenu[i] = list_add_item(list, NULL, NAMES[i], menu_btn_cb, i);
 
-  // The tap-snooze item shows its state inline; grab its label and set it.
+  // Inline-state items show their value in the label; grab and set them.
   s_tapLabel = lv_obj_get_child(s_fMenu[MENU_TAPSNOOZE], 0);
   menu_refresh_tapsnooze();
+  s_modeLabel = lv_obj_get_child(s_fMenu[MENU_MODE], 0);
+  menu_refresh_mode();
 }
 
 // -------------------------------------------------------- AlarmEdit scr ---
@@ -1082,7 +1146,11 @@ static void load_screen(UiScreen id) {
 
   switch (id) {
   case SCR_CLOCK: refresh_clock(true); group_set(NULL, 0); break;
-  case SCR_MENU:  menu_refresh_tapsnooze(); group_set(s_fMenu, 8); break;
+  case SCR_MENU:
+    menu_refresh_tapsnooze();
+    menu_refresh_mode();
+    group_set(s_fMenu, MENU_COUNT);
+    break;
   case SCR_ALARM: alarm_sync_widgets(); group_set(s_fAlarm, 7); break;
   case SCR_TZ:    tz_sync_widgets(); group_set(s_fTz, 4); break;
   case SCR_DISP:  disp_sync_widgets(); group_set(s_fDisp, 3); break;
@@ -1300,7 +1368,10 @@ void ui_handle_event(const ButtonEvent &ev) {
   }
 
   if (s_screen == SCR_CLOCK) {
-    if (ev.id == BtnId::B1 || ev.id == BtnId::B4)
+    // Game mode: B2..B4 belong to the USB gamepad (read raw by UsbGamepad),
+    // so only B1 opens the menu. Other modes: B1 or B4 opens it.
+    if (ev.id == BtnId::B1 ||
+        (ev.id == BtnId::B4 && settings().mode != MODE_GAME))
       load_screen(SCR_MENU);
     return;
   }
