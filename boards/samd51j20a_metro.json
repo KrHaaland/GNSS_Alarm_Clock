@@ -1,7 +1,7 @@
 {
   "build": {
     "arduino": {
-        "ldscript": "flash_with_bootloader.ld"
+      "ldscript": "flash_with_bootloader.ld"
     },
     "core": "adafruit",
     "cpu": "cortex-m4",
@@ -28,7 +28,7 @@
     ],
     "mcu": "samd51j20a",
     "system": "samd",
-    "usb_product": "GNSS Alarm Clock",
+    "usb_product": "KH GNSS Alarm Clock",
     "variant": "metro_m4"
   },
   "debug": {
@@ -58,5 +58,5 @@
     "wait_for_upload_port": true
   },
   "url": "https://github.com/KrHaaland/GNSS_Alarm_Clock",
-  "vendor": "Marna Engineering"
+  "vendor": "K. Haaland"
 }
