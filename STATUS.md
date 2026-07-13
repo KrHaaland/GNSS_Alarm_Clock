@@ -89,25 +89,18 @@ must be SWD-flashed until a J20 UF2 bootloader is built.
 
 ## 3. Open HARDWARE items
 
-### 🔴 RV-3028 RTC (U5) not on the I²C bus — **primary blocker**
-Bus scan result (at 100 kHz): **0x18 accel ✅, 0x50 EEPROM ✅, 0x58 amp ✅,
-`0x52` RTC ❌ (no ACK)**. Three devices answer on the same bus, so wiring /
-pull-ups / 3.3 V are fine — the RTC alone is silent. A powered I²C chip always
-ACKs its address, so this is a **hardware fault on U5**: most likely an open
-solder joint.
+### 🔴 RV-3028 RTC (U5) not on the I²C bus — **root cause found: not populated!**
+Bus scan (100 kHz) showed 0x18/0x50/0x58 answering and `0x52` silent — and the
+bench inspection revealed why: **U5 was never soldered onto this prototype.**
+Being hand-fitted now.
 
-**To fix (bench):**
-1. Measure **VDD (U5 pin 7) → should be ~3.3 V** to GND. #1 suspect.
-2. Continuity on **SDA (pin 4)** and **SCL (pin 3)** from the U5 pin to a
-   known-good bus point (don't just check for 3.3 V — the pull-ups hold the line
-   high even if U5's stub is open).
-3. Continuity on **GND (pin 5)**.
-4. **Reflow pins 3/4/5/7.** If still no ACK, the chip is likely dead / mis-placed
-   (check pin-1 mark).
+**After soldering:** power-cycle (the RTC is probed once at boot), then check
+Menu → System info → should read **"RTC ok"** instead of "RTC MISSING". For a
+live probe instead: set `I2C_SCAN 1` in main.cpp, reflash, watch USB serial
+for `ACK 0x52`.
 
-**Impact while broken:** clock still works when GNSS has a fix; it loses time on
-power-off and can't set time indoors with no fix (that's the RTC's job).
-**Re-test:** set `I2C_SCAN 1`, reflash, watch USB serial for `ACK 0x52`.
+**Impact while absent:** clock works when GNSS has a fix; loses time on
+power-off and can't set time indoors (that's the RTC's job).
 
 ### L86 GNSS signals unrouted (new findings)
 - **1PPS (L86 pin 6) is a dead-end net** — no hardware pulse-per-second to the
