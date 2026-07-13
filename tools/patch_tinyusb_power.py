@@ -11,28 +11,36 @@ import re
 
 Import("env")  # noqa: F821 - provided by PlatformIO/SCons
 
-F = os.path.join(
-    env.subst("$PROJECT_LIBDEPS_DIR"), env["PIOENV"],
-    "Adafruit TinyUSB Library", "src", "arduino", "Adafruit_USBD_Device.cpp")
+# Both copies must be patched: the lib_deps 2.4.1 copy AND the copy bundled
+# inside the Adafruit SAMD core package — the build compiles both and the
+# linker has been observed picking the bundled one for these symbols.
+CANDIDATES = [
+    os.path.join(env.subst("$PROJECT_LIBDEPS_DIR"), env["PIOENV"],
+                 "Adafruit TinyUSB Library", "src", "arduino",
+                 "Adafruit_USBD_Device.cpp"),
+    os.path.join(
+        env.PioPlatform().get_package_dir("framework-arduino-samd-adafruit")
+        or "", "libraries", "Adafruit_TinyUSB_Arduino", "src", "arduino",
+        "Adafruit_USBD_Device.cpp"),
+]
 
-try:
-    with open(F) as f:
-        src = f.read()
-except FileNotFoundError:
-    print("patch_tinyusb_power: library not installed yet; will patch on the "
-          "next build")
-else:
+for F in CANDIDATES:
+    try:
+        with open(F) as f:
+            src = f.read()
+    except (FileNotFoundError, NotADirectoryError):
+        print("patch_tinyusb_power: not found (yet): %s" % F)
+        continue
     if "USB_CONFIG_POWER)," in src:
-        pass  # already patched
+        continue  # already patched
+    new, n = re.subn(
+        r"(TUSB_DESC_CONFIG_ATT_REMOTE_WAKEUP \| TU_BIT\(7\),\s*\n\s*)100\)",
+        lambda m: m.group(1) + "USB_CONFIG_POWER)",
+        src, count=1)
+    if n == 1:
+        with open(F, "w") as f:
+            f.write(new)
+        print("patch_tinyusb_power: patched %s" % F)
     else:
-        new, n = re.subn(
-            r"(TUSB_DESC_CONFIG_ATT_REMOTE_WAKEUP \| TU_BIT\(7\),\s*\n\s*)100\)",
-            lambda m: m.group(1) + "USB_CONFIG_POWER)",
-            src, count=1)
-        if n == 1:
-            with open(F, "w") as f:
-                f.write(new)
-            print("patch_tinyusb_power: bMaxPower now uses USB_CONFIG_POWER")
-        else:
-            print("patch_tinyusb_power: WARNING - pattern not found "
-                  "(TinyUSB version changed?); bMaxPower stays 100 mA")
+        print("patch_tinyusb_power: WARNING - pattern not found in %s "
+              "(TinyUSB version changed?); bMaxPower stays 100 mA" % F)
