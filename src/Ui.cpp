@@ -625,7 +625,6 @@ static void make_alarm() {
   row = make_row(scr, "Tune");
   s_alTune = lv_dropdown_create(row);
   lv_obj_set_width(s_alTune, 150);
-  lv_obj_set_style_max_height(lv_dropdown_get_list(s_alTune), 58, 0);
   lv_obj_set_style_text_font(lv_dropdown_get_list(s_alTune),
                              &lv_font_montserrat_12, 0);
   blacken(lv_dropdown_get_list(s_alTune)); // popup list is off-screen tree
@@ -738,7 +737,6 @@ static void make_timezone() {
   s_tzZone = lv_dropdown_create(row);
   lv_dropdown_set_options_static(s_tzZone, TZ_OPTS);
   lv_obj_set_width(s_tzZone, 150);
-  lv_obj_set_style_max_height(lv_dropdown_get_list(s_tzZone), 58, 0);
   lv_obj_set_style_text_font(lv_dropdown_get_list(s_tzZone),
                              &lv_font_montserrat_12, 0);
   blacken(lv_dropdown_get_list(s_tzZone));
@@ -816,7 +814,6 @@ static void make_display() {
   s_dDim = lv_dropdown_create(row);
   lv_dropdown_set_options_static(s_dDim, DIM_OPTS);
   lv_obj_set_width(s_dDim, 100);
-  lv_obj_set_style_max_height(lv_dropdown_get_list(s_dDim), 58, 0);
   lv_obj_set_style_text_font(lv_dropdown_get_list(s_dDim),
                              &lv_font_montserrat_12, 0);
   blacken(lv_dropdown_get_list(s_dDim));
@@ -998,13 +995,45 @@ static void load_screen(UiScreen id) {
 }
 
 // ------------------------------------------------------------ edit mode ---
+
+// A dropdown list has nowhere sensible to open on a 76 px panel: LVGL sees
+// too little room below the row, flips the list above it and clips it at the
+// screen edge. Instead, re-anchor the just-opened list as a TOP overlay:
+// y = 0, up to the full screen height, with the selected option scrolled to
+// the middle (same math as LVGL's own position_to_selected, which ran before
+// the resize). x/width are left where LVGL aligned them (under the widget).
+static void dropdown_overlay(lv_obj_t *dd) {
+  lv_obj_t *list = lv_dropdown_get_list(dd);
+  if (!list)
+    return;
+  lv_obj_set_height(list, LV_SIZE_CONTENT);
+  lv_obj_update_layout(list);
+  int32_t h = lv_obj_get_height(list);
+  if (h > DISP_H)
+    h = DISP_H;
+  lv_obj_set_height(list, h);
+  lv_obj_set_y(list, 0);
+  lv_obj_update_layout(list);
+  lv_obj_t *label = lv_obj_get_child(list, 0); // options live in one label
+  const lv_font_t *font = lv_obj_get_style_text_font(list, LV_PART_MAIN);
+  int32_t lineH = lv_font_get_line_height(font) +
+                  (label ? lv_obj_get_style_text_line_space(label, LV_PART_MAIN)
+                         : 0);
+  int32_t sel = (int32_t)lv_dropdown_get_selected(dd);
+  lv_obj_scroll_to_y(list, sel * lineH - (h / 2 - lineH / 2), LV_ANIM_OFF);
+}
+
 static void enter_edit(lv_obj_t *f) {
   s_editing = true;
   lv_obj_add_state(f, LV_STATE_EDITED);
-  if (lv_obj_check_type(f, &lv_dropdown_class))
-    push_key(LV_KEY_ENTER); // open the option list
-  else if (lv_obj_check_type(f, &lv_roller_class))
+  if (lv_obj_check_type(f, &lv_dropdown_class)) {
+    // Open directly (a queued LV_KEY_ENTER would only open on the next indev
+    // read — too late to reposition the list in the same frame).
+    lv_dropdown_open(f);
+    dropdown_overlay(f);
+  } else if (lv_obj_check_type(f, &lv_roller_class)) {
     s_rollerOrig = (uint16_t)lv_roller_get_selected(f); // for commit/cancel
+  }
 }
 
 static void exit_edit() {
