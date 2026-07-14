@@ -82,8 +82,8 @@ static char s_cTzInfo[64];
 static uint32_t s_tzNoteUntil;
 
 // Display
-static lv_obj_t *s_dBright, *s_dDim, *s_dDimLvl;
-static lv_obj_t *s_fDisp[3];
+static lv_obj_t *s_dVolume, *s_dBright, *s_dDim, *s_dDimLvl;
+static lv_obj_t *s_fDisp[4];
 
 // Tunes
 static lv_obj_t *s_tuneList;
@@ -578,7 +578,7 @@ static void make_menu() {
   lv_obj_set_style_border_width(list, 0, 0);
 
   static const char *const NAMES[MENU_COUNT] = {
-      "Alarm 1", "Alarm 2",    "Time & zone", "Display", "Tunes",
+      "Alarm 1", "Alarm 2",    "Time & zone", "Disp & sound", "Tunes",
       "System info", "Tap snooze", "Mode",    "Ramp",    "Back"};
   for (uint8_t i = 0; i < MENU_COUNT; i++)
     s_fMenu[i] = list_add_item(list, NULL, NAMES[i], menu_btn_cb, i);
@@ -833,6 +833,15 @@ static void make_timezone() {
 }
 
 // ---------------------------------------------------------- Display scr ---
+static void disp_vol_cb(lv_event_t *e) {
+  (void)e;
+  uint8_t v = (uint8_t)lv_slider_get_value(s_dVolume);
+  settings().volume = v;
+  if (amp_enabled())
+    amp_set_volume(v); // live while previewing/ringing
+  mark_dirty();
+}
+
 static void disp_bright_cb(lv_event_t *e) {
   (void)e;
   uint8_t v = (uint8_t)lv_slider_get_value(s_dBright);
@@ -857,6 +866,7 @@ static void disp_dimlvl_cb(lv_event_t *e) {
 }
 
 static void disp_sync_widgets() {
+  lv_slider_set_value(s_dVolume, settings().volume, LV_ANIM_OFF);
   lv_slider_set_value(s_dBright, settings().brightness, LV_ANIM_OFF);
   uint16_t t = settings().dimTimeoutS;
   uint16_t sel = 0;
@@ -873,7 +883,13 @@ static void make_display() {
   lv_obj_t *scr = make_settings_screen();
   s_scr[SCR_DISP] = scr;
 
-  lv_obj_t *row = make_row(scr, "Brightness");
+  lv_obj_t *row = make_row(scr, "Volume");
+  s_dVolume = lv_slider_create(row);
+  lv_slider_set_range(s_dVolume, 0, 10);
+  lv_obj_set_size(s_dVolume, 120, 8);
+  lv_obj_add_event_cb(s_dVolume, disp_vol_cb, LV_EVENT_VALUE_CHANGED, NULL);
+
+  row = make_row(scr, "Brightness");
   s_dBright = lv_slider_create(row);
   lv_slider_set_range(s_dBright, 5, 255);
   lv_obj_set_size(s_dBright, 120, 8);
@@ -894,8 +910,8 @@ static void make_display() {
   lv_obj_set_size(s_dDimLvl, 120, 8);
   lv_obj_add_event_cb(s_dDimLvl, disp_dimlvl_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
-  lv_obj_t *foc[3] = {s_dBright, s_dDim, s_dDimLvl};
-  for (uint8_t i = 0; i < 3; i++) {
+  lv_obj_t *foc[4] = {s_dVolume, s_dBright, s_dDim, s_dDimLvl};
+  for (uint8_t i = 0; i < 4; i++) {
     s_fDisp[i] = foc[i];
     lv_obj_add_flag(foc[i], LV_OBJ_FLAG_SCROLL_ON_FOCUS);
   }
@@ -1062,7 +1078,7 @@ static void load_screen(UiScreen id) {
     break;
   case SCR_ALARM: alarm_sync_widgets(); group_set(s_fAlarm, 7); break;
   case SCR_TZ:    tz_sync_widgets(); group_set(s_fTz, 4); break;
-  case SCR_DISP:  disp_sync_widgets(); group_set(s_fDisp, 3); break;
+  case SCR_DISP:  disp_sync_widgets(); group_set(s_fDisp, 4); break;
   case SCR_TUNES:
     tunes_rebuild();
     group_set(s_fTunes, s_nfTunes);
@@ -1145,10 +1161,16 @@ static void handle_edit_key(const ButtonEvent &ev) {
   // rates don't stack. Dropdowns are stepped by queued keys; 5 fits the
   // 8-deep key queue. Buttonmatrix (weekdays) keeps single steps.
   bool big = ev.action == BtnAction::Long;
+  // Small-range sliders (volume 0..10) step 1/3; wide ones (0..255) 10/50.
+  int sfine = 10, scoarse = 50;
+  if (slider) {
+    int span = lv_slider_get_max_value(f) - lv_slider_get_min_value(f);
+    if (span <= 20) { sfine = 1; scoarse = 3; }
+  }
   switch (ev.id) {
   case BtnId::B2: // decrease / previous
     if (slider)
-      slider_step(f, big ? -50 : -10);
+      slider_step(f, big ? -scoarse : -sfine);
     else if (roller)
       roller_step(f, big ? -10 : -1);
     else
@@ -1157,7 +1179,7 @@ static void handle_edit_key(const ButtonEvent &ev) {
     break;
   case BtnId::B3: // increase / next
     if (slider)
-      slider_step(f, big ? +50 : +10);
+      slider_step(f, big ? +scoarse : +sfine);
     else if (roller)
       roller_step(f, big ? +10 : +1);
     else

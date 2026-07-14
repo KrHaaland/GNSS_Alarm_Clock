@@ -37,7 +37,7 @@ Dropdown lists open as a full-screen overlay with the current choice centered.
 |---|---|
 | Alarm 1 / Alarm 2 | Enable switch, time rollers, weekday matrix (S M T W T F S — **no days selected = every day**), tune dropdown, Test, Save. *Back does not save.* |
 | Time & zone | **Auto TZ (GNSS)** on/off; manual **Zone** = the full GMT ladder (GMT−12…+14 incl. half/quarter hours, fixed offsets, no DST); 24 h switch; **Sync now**. |
-| Display | Brightness slider (live), dim-after timeout, dim level. |
+| Disp & sound | **Volume** (0–10, live while a tune plays), brightness slider (live), dim-after timeout, dim level. |
 | Tunes | Preview built-in melodies and WAVs from the TUNES drive (press again to stop). Unavailable while the USB host owns the drive. |
 | System info | Fix/sats/HDOP, position, speed/altitude, zone + POSIX string, UTC offset/DST, GNSS sync age, RTC status, caps status, **snooze counters**, FW version. Scroll with B2/B3. |
 | Tap snooze | Toggle double-tap-to-snooze. |
