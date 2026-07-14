@@ -14,6 +14,13 @@ a color TFT driven by four buttons.
 > missing from the prototype) all work. See [`STATUS.md`](STATUS.md) and
 > [`HARDWARE_REVIEW.md`](HARDWARE_REVIEW.md).
 
+## Documentation
+
+- **[User guide](docs/USER_GUIDE.md)** — buttons, menu, alarms, modes, tunes
+- **[Architecture decisions](docs/adr/)** — why things are the way they are
+- **[STATUS.md](STATUS.md)** — living status report · **[HARDWARE_REVIEW.md](HARDWARE_REVIEW.md)** — board findings
+- CI: GitHub Actions builds all firmware targets + runs the native test suite on every push
+
 ## What it does
 
 - **Time**: The Quectel **L86** GNSS receiver (Serial1, 9600 NMEA, RMC+GGA @1 Hz,

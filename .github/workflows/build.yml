@@ -1,0 +1,42 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  firmware:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            .pio/libdeps
+          key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
+
+      - name: Install PlatformIO
+        run: pip install platformio
+
+      # Host-side unit tests (timezone/DST engine, 22 cases)
+      - name: Native tests
+        run: pio test -e native
+
+      # All firmware targets: J19 + J20, normal + GNSS-simulator
+      - name: Build firmware (all envs)
+        run: pio run -e adafruit_metro_m4 -e sim -e metro_m4_j20 -e sim_j20
+
+      - name: Flash usage summary
+        run: |
+          for e in adafruit_metro_m4 metro_m4_j20; do
+            echo "== $e =="
+            ls -l .pio/build/$e/firmware.bin
+          done
