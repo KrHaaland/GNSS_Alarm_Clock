@@ -60,9 +60,14 @@ static void start_ringing(int8_t idx, bool escalated) {
     // Initial fire or snooze re-ring: kill any tune preview and (re)start
     // the alarm sound from the beginning.
     audio_stop();
-    amp_set_volume(settings().volume);
-    audio_set_volume(settings().volume);
+    // Digital volume pinned high: with AGC leveling on the amp, loudness is
+    // set by the amp's limiter (amp_set_volume/amp_ramp_to). See ADR-0010.
+    audio_set_volume(10);
     amp_enable(true);
+    if (!alarm_fire_was_rering() && settings().rampSeconds > 0)
+      amp_ramp_to(settings().volume, settings().rampSeconds); // gentle wake
+    else
+      amp_set_volume(settings().volume); // re-ring: no mercy
     bool ok = false;
     if (a.tune[0] != '\0')
       ok = audio_play_wav(a.tune, true);
@@ -72,6 +77,7 @@ static void start_ringing(int8_t idx, bool escalated) {
 
   if (escalated && !s_escalated) {
     s_escalated = true;
+    amp_set_volume(settings().volume); // escalation jumps past any ramp
     buzzer_start();
     leds_start(LedPattern::Blink, 250); // more aggressive pattern
   }
@@ -210,6 +216,7 @@ void loop() {
   dispatch_buttons();
   ui_task();
   gamepad_task(); // HID reports while in MODE_GAME (tilt + B2..B4)
+  amp_task();     // gentle-wake volume ramp
 
   lv_timer_handler();
 }

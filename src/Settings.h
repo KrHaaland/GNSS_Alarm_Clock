@@ -47,6 +47,7 @@ struct Settings {
   AlarmConfig alarms[NUM_ALARMS];
 
   uint8_t volume;         // 0..10 master alarm volume
+  uint8_t rampSeconds;    // gentle-wake ramp 0/15/30/60 s (0 = off)
   uint8_t snoozeMinutes;  // default 9
   uint8_t buzzerAfterMin; // escalate to power buzzer after N min ringing, 0=off
   bool tapSnooze;         // LIS3DH tap = snooze while ringing

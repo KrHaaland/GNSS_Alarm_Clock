@@ -41,12 +41,15 @@ Dropdown lists open as a full-screen overlay with the current choice centered.
 | Tunes | Preview built-in melodies and WAVs from the TUNES drive (press again to stop). Unavailable while the USB host owns the drive. |
 | System info | Fix/sats/HDOP, position, speed/altitude, zone + POSIX string, UTC offset/DST, GNSS sync age, RTC status, caps status, **snooze counters**, FW version. Scroll with B2/B3. |
 | Tap snooze | Toggle double-tap-to-snooze. |
+| Ramp | Gentle wake: the first ring fades in over Off/15/30/60 s. Snooze re-rings and buzzer escalation play at full volume immediately. |
 | Mode | Cycles the main screen: **Alarm clock → Speedometer → Altimeter → Game mode**. |
 | Back | To the clock. |
 
 ## Alarms
 
-- On trigger: LED chase + the chosen tune (WAV, else built-in melody).
+- On trigger: LED chase + the chosen tune (WAV, else built-in melody) —
+  fading in over the configured **Ramp** time on the first ring. Tunes play
+  at comparable loudness regardless of how the WAV was mastered (AGC).
   After the configured minutes unacknowledged, the power buzzer joins in.
   Auto-silence after 15 min; the alarm re-arms for its next day.
 - **Snooze**: short-press any button, or **double-tap the clock body**

@@ -29,6 +29,10 @@ time_t alarm_snooze_until();   // local epoch, valid while Snoozed
 // Next scheduled alarm occurrence in local time; false if none enabled.
 bool alarm_next_occurrence(time_t localNow, time_t &nextLocal, int8_t &index);
 
+// True when the most recent ring was a snooze re-ring (used to skip the
+// gentle-wake volume ramp — you are already awake).
+bool alarm_fire_was_rering();
+
 // Snooze shame counter: snoozes so far in the current local week (Mon-start).
 // Week-rollover aware; the all-time count lives in settings().snoozeTotal.
 uint16_t alarm_snoozes_this_week();

@@ -25,8 +25,8 @@
 // --- packed image layout -----------------------------------------------------
 #define PACK_MAGIC0 'G'
 #define PACK_MAGIC1 'C'
-#define PACK_VERSION 1
-#define PACK_LEN 39           // incl. trailing checksum; <= RTC_USER_EEPROM_SIZE
+#define PACK_VERSION 2 // v2: + rampSeconds (v1 blocks migrate in place)
+#define PACK_LEN 40           // incl. trailing checksum; <= RTC_USER_EEPROM_SIZE
 #define EPOCH2020_DAYS 18262u // 2020-01-01 in unix epoch-days (weekStart base)
 
 enum : uint8_t {
@@ -42,8 +42,10 @@ enum : uint8_t {
   OFF_SNZWEEKSTART = 22, // u16, local epoch-day - EPOCH2020_DAYS
   OFF_ALARM0 = 24,     // 7 B each: flags,hour,min,mask,melody,hash(u16)
   OFF_ALARM1 = 31,
-  OFF_CHECKSUM = 38,
+  OFF_RAMP = 38,       // gentle-wake ramp seconds (added in v2)
+  OFF_CHECKSUM = 39,
 };
+#define V1_LEN 39 // v1 image: no ramp byte, checksum at offset 38
 // flags byte: b0 tzAuto, b1 tapSnooze, b2 use24h, b3 havePosition, b4-5 mode
 // alarm flags byte: b0 enabled
 
@@ -84,9 +86,9 @@ static int16_t centideg(float v) {
   return (int16_t)(c >= 0 ? c + 0.5f : c - 0.5f);
 }
 
-static uint8_t checksum(const uint8_t *b) {
+static uint8_t checksum(const uint8_t *b, uint8_t csOff) {
   uint8_t sum = 0;
-  for (uint8_t i = 0; i < OFF_CHECKSUM; i++)
+  for (uint8_t i = 0; i < csOff; i++)
     sum = (uint8_t)(sum + b[i]);
   return (uint8_t)(0xFF - sum); // so full-block sum == 0xFF when intact
 }
@@ -124,7 +126,8 @@ static void pack(const Settings &in, uint8_t out[PACK_LEN]) {
     a[4] = ac.melodyId;
     put16(&a[5], tune_hash(ac.tune));
   }
-  out[OFF_CHECKSUM] = checksum(out);
+  out[OFF_RAMP] = in.rampSeconds;
+  out[OFF_CHECKSUM] = checksum(out, OFF_CHECKSUM);
 }
 
 // Tune hashes seen at unpack; resolved against the TUNES directory once
@@ -168,6 +171,7 @@ static void unpack(const uint8_t in[PACK_LEN], Settings &out) {
   out.snoozeTotal = get32(&in[OFF_SNZTOTAL]);
   out.snoozeWeek = get16(&in[OFF_SNZWEEK]);
   out.snoozeWeekStart = EPOCH2020_DAYS + get16(&in[OFF_SNZWEEKSTART]);
+  out.rampSeconds = in[OFF_RAMP] <= 60 ? in[OFF_RAMP] : 30;
   for (uint8_t i = 0; i < NUM_ALARMS; i++) {
     const uint8_t *a = &in[i == 0 ? OFF_ALARM0 : OFF_ALARM1];
     AlarmConfig &ac = out.alarms[i];
@@ -226,6 +230,7 @@ void settings_defaults() {
   s.alarms[1].melodyId = 2;
 
   s.volume = 7;
+  s.rampSeconds = 30;
   s.snoozeMinutes = 9;
   s.buzzerAfterMin = 5;
   s.tapSnooze = true;
@@ -251,14 +256,25 @@ void settings_begin() {
     haveLast = false;
     return;
   }
-  if (img[OFF_MAGIC0] == PACK_MAGIC0 && img[OFF_MAGIC1] == PACK_MAGIC1 &&
-      img[OFF_VERSION] == PACK_VERSION && img[OFF_CHECKSUM] == checksum(img)) {
+  bool magicOk = img[OFF_MAGIC0] == PACK_MAGIC0 && img[OFF_MAGIC1] == PACK_MAGIC1;
+  if (magicOk && img[OFF_VERSION] == PACK_VERSION &&
+      img[OFF_CHECKSUM] == checksum(img, OFF_CHECKSUM)) {
     unpack(img, s);
     resolve_tunes();
     memcpy(lastPacked, img, PACK_LEN);
     haveLast = true;
+  } else if (magicOk && img[OFF_VERSION] == 1 &&
+             img[V1_LEN - 1] == checksum(img, V1_LEN - 1)) {
+    // v1 -> v2: the ramp byte was appended before the checksum. Take the v1
+    // fields as-is, default the ramp, persist as v2.
+    img[OFF_RAMP] = 0xFF; // force default in unpack's range check
+    unpack(img, s);
+    s.rampSeconds = 30;
+    resolve_tunes();
+    haveLast = false;
+    settings_save();
   } else {
-    // Blank chip / torn write / older format: persist the defaults.
+    // Blank chip / torn write / unknown format: persist the defaults.
     haveLast = false;
     settings_save();
   }

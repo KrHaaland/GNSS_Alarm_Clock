@@ -16,6 +16,7 @@ static time_t s_snoozeUntil = 0;
 // trigger minute cannot refire the same alarm.
 static int32_t s_lastFiredMinute[NUM_ALARMS];
 static uint32_t s_lastEvalMs = 0;
+static bool s_fireWasReRing = false;
 
 static AlarmRingCb s_onRing = nullptr;
 static AlarmSilenceCb s_onSilence = nullptr;
@@ -77,12 +78,16 @@ void alarm_task() {
       s_lastFiredMinute[i] = curMinute; // guard regardless of state
       // Ring when idle, or take over a snooze (a different alarm is now due —
       // don't let it be silently swallowed while another is snoozing).
-      if (s_state == AlarmState::Idle || s_state == AlarmState::Snoozed)
+      if (s_state == AlarmState::Idle || s_state == AlarmState::Snoozed) {
+        s_fireWasReRing = false;
         start_ringing((int8_t)i, false);
+      }
     }
 
-    if (s_state == AlarmState::Snoozed && local >= s_snoozeUntil)
+    if (s_state == AlarmState::Snoozed && local >= s_snoozeUntil) {
+      s_fireWasReRing = true;
       start_ringing(s_ringingIndex, false);
+    }
   }
 
   // Ringing runs on millis so an alarm in progress escalates and
@@ -123,6 +128,8 @@ static void snooze_shame_bump() {
   st.snoozeWeek++;
   settings_save();
 }
+
+bool alarm_fire_was_rering() { return s_fireWasReRing; }
 
 uint16_t alarm_snoozes_this_week() {
   const Settings &st = settings();

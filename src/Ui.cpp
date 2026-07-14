@@ -64,9 +64,10 @@ static char s_cStatL[24], s_cStatR[24];
 static char s_cBig[12], s_cSec[8], s_cAmpm[8], s_cBottom[72];
 
 // Menu
-static lv_obj_t *s_fMenu[9];
+static lv_obj_t *s_fMenu[10];
 static lv_obj_t *s_tapLabel;  // "Tap snooze: On/Off" toggle item label
 static lv_obj_t *s_modeLabel; // "Mode: ..." cycle item label
+static lv_obj_t *s_rampLabel; // "Ramp: ..." cycle item label
 
 // AlarmEdit
 static int8_t s_alarmIdx;
@@ -280,7 +281,7 @@ static void preview_start(uint16_t sel, uint32_t timeoutMs) {
   }
   preview_stop();
   amp_set_volume(settings().volume);
-  audio_set_volume(settings().volume);
+  audio_set_volume(10); // digital pinned; the amp limiter sets loudness
   amp_enable(true);
   bool ok = false;
   if (isWav && (sel - AUDIO_MELODY_COUNT) < s_tuneCount)
@@ -497,9 +498,9 @@ static void make_clock() {
 // ------------------------------------------------------------- Menu scr ---
 enum : uint8_t {
   MENU_ALARM1, MENU_ALARM2, MENU_TZ, MENU_DISPLAY, MENU_TUNES, MENU_SYSINFO,
-  MENU_TAPSNOOZE, MENU_MODE, MENU_BACK
+  MENU_TAPSNOOZE, MENU_MODE, MENU_RAMP, MENU_BACK
 };
-#define MENU_COUNT 9
+#define MENU_COUNT 10
 
 static void menu_refresh_tapsnooze() {
   if (s_tapLabel)
@@ -514,6 +515,16 @@ static void menu_refresh_mode() {
   if (s_modeLabel)
     lv_label_set_text_fmt(s_modeLabel, "Mode: %s",
                           MODE_NAMES[settings().mode % MODE_COUNT]);
+}
+
+static void menu_refresh_ramp() {
+  if (!s_rampLabel)
+    return;
+  if (settings().rampSeconds == 0)
+    lv_label_set_text_static(s_rampLabel, "Ramp: Off");
+  else
+    lv_label_set_text_fmt(s_rampLabel, "Ramp: %u s",
+                          (unsigned)settings().rampSeconds);
 }
 
 static void menu_btn_cb(lv_event_t *e) {
@@ -535,6 +546,13 @@ static void menu_btn_cb(lv_event_t *e) {
     settings_save();
     menu_refresh_mode();
     break;
+  case MENU_RAMP: { // gentle-wake ramp: Off -> 15 -> 30 -> 60 s
+    uint8_t r = settings().rampSeconds;
+    settings().rampSeconds = (r == 0) ? 15 : (r == 15) ? 30 : (r == 30) ? 60 : 0;
+    settings_save();
+    menu_refresh_ramp();
+    break;
+  }
   default:           load_screen(SCR_CLOCK); break;
   }
 }
@@ -561,7 +579,7 @@ static void make_menu() {
 
   static const char *const NAMES[MENU_COUNT] = {
       "Alarm 1", "Alarm 2",    "Time & zone", "Display", "Tunes",
-      "System info", "Tap snooze", "Mode",    "Back"};
+      "System info", "Tap snooze", "Mode",    "Ramp",    "Back"};
   for (uint8_t i = 0; i < MENU_COUNT; i++)
     s_fMenu[i] = list_add_item(list, NULL, NAMES[i], menu_btn_cb, i);
 
@@ -570,6 +588,8 @@ static void make_menu() {
   menu_refresh_tapsnooze();
   s_modeLabel = lv_obj_get_child(s_fMenu[MENU_MODE], 0);
   menu_refresh_mode();
+  s_rampLabel = lv_obj_get_child(s_fMenu[MENU_RAMP], 0);
+  menu_refresh_ramp();
 }
 
 // -------------------------------------------------------- AlarmEdit scr ---
@@ -946,6 +966,14 @@ static void refresh_sysinfo(bool force) {
   } else {
     strcpy(alt, "--");
   }
+  const char *ampStatus = "off (idle)";
+  {
+    bool fault = false, thermal = false;
+    if (amp_get_status(fault, thermal))
+      ampStatus = thermal ? "THERMAL" : fault ? "FAULT (output)" : "ok";
+    else if (!amp_present())
+      ampStatus = "MISSING";
+  }
   uint32_t a = clock_last_gnss_sync_age_s();
   if (a == UINT32_MAX)
     strcpy(age, "never");
@@ -970,6 +998,7 @@ static void refresh_sysinfo(bool force) {
            "GNSS sync %s   RTC %s\n"
            "Caps %s\n"
            "Snoozed %u this week, %lu total\n"
+           "Amp %s\n"
            "FW " UI_FW_VERSION " " __DATE__,
            gnss_has_fix() ? "yes" : "no", (unsigned)gnss_num_sats(), hdop, lat,
            lon, spd, alt, settings().tzName, settings().tzPosix, sign,
@@ -977,7 +1006,7 @@ static void refresh_sysinfo(bool force) {
            clock_is_dst() ? " DST" : "", age, rtc_present() ? "ok" : "MISSING",
            supercaps_ready() ? "ready" : "charging",
            (unsigned)alarm_snoozes_this_week(),
-           (unsigned long)settings().snoozeTotal);
+           (unsigned long)settings().snoozeTotal, ampStatus);
   if (force || strcmp(s_cSys, b) != 0) {
     snprintf(s_cSys, sizeof(s_cSys), "%s", b);
     lv_label_set_text(s_sysLabel, b);
@@ -1028,6 +1057,7 @@ static void load_screen(UiScreen id) {
   case SCR_MENU:
     menu_refresh_tapsnooze();
     menu_refresh_mode();
+    menu_refresh_ramp();
     group_set(s_fMenu, MENU_COUNT);
     break;
   case SCR_ALARM: alarm_sync_widgets(); group_set(s_fAlarm, 7); break;

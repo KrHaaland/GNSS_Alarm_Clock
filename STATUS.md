@@ -94,6 +94,12 @@ and in windows after each programmed byte) — fixed with tolerant busy-wait +
 per-byte retry & read-back verify. **User-verified: settings survive both
 reboot and reflash.**
 
+**Amp (TPA2016) rework:** AGC 1:4 loudness leveling (all tunes comparable),
+volume 0–10 now maps to the output limiter (0.5 dB steps), **gentle-wake
+ramp** (menu "Ramp": Off/15/30/60 s — first ring only; re-rings and buzzer
+escalation at full volume), amp fault/thermal status on System info.
+Limiter ceiling conservative (+6.5 dBV) until the speaker rating is known.
+
 **Docs:** README refreshed to current reality; this STATUS report added.
 
 ---
