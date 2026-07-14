@@ -15,8 +15,44 @@ static time_t s_snoozeUntil = 0;
 // Set on any match (even while Ringing/Snoozed) so stopping during the
 // trigger minute cannot refire the same alarm.
 static int32_t s_lastFiredMinute[NUM_ALARMS];
+// Random-jitter targets: for each alarm, the nominal occurrence (local
+// epoch-minute) the current roll belongs to, and the rolled target minute.
+static int32_t s_jitterBaseMin[NUM_ALARMS];
+static int32_t s_jitterTargetMin[NUM_ALARMS];
 static uint32_t s_lastEvalMs = 0;
 static bool s_fireWasReRing = false;
+
+// True random bits from the SAMD51 TRNG peripheral (enabled on demand).
+static uint32_t trng_random() {
+  if (!MCLK->APBCMASK.bit.TRNG_) {
+    MCLK->APBCMASK.bit.TRNG_ = 1;
+    TRNG->CTRLA.reg = TRNG_CTRLA_ENABLE;
+  }
+  while (!TRNG->INTFLAG.bit.DATARDY) {
+  }
+  return TRNG->DATA.reg;
+}
+
+// Next nominal occurrence (local epoch-minute) of alarm i seen from refLocal;
+// -1 when none within 8 days. Mirrors alarm_next_occurrence for one alarm.
+static int32_t nominal_minute_for(uint8_t i, time_t refLocal) {
+  const AlarmConfig &a = settings().alarms[i];
+  uint8_t mask = a.daysMask ? a.daysMask : 0x7F;
+  int year, mon, day, hour, min, sec, wday;
+  epoch_to_tm(refLocal, year, mon, day, hour, min, sec, wday);
+  time_t midnight = refLocal - ((time_t)hour * 3600 + min * 60 + sec);
+  for (uint8_t d = 0; d < 8; d++) {
+    uint8_t w = (uint8_t)((wday + d) % 7);
+    if (!((mask >> w) & 1))
+      continue;
+    time_t t =
+        midnight + (time_t)d * 86400 + (time_t)a.hour * 3600 + a.minute * 60;
+    if (t < refLocal)
+      continue;
+    return (int32_t)(t / 60);
+  }
+  return -1;
+}
 
 static AlarmRingCb s_onRing = nullptr;
 static AlarmSilenceCb s_onSilence = nullptr;
@@ -28,8 +64,11 @@ void alarm_begin() {
   s_escalated = false;
   s_snoozeUntil = 0;
   s_lastEvalMs = 0;
-  for (uint8_t i = 0; i < NUM_ALARMS; i++)
+  for (uint8_t i = 0; i < NUM_ALARMS; i++) {
     s_lastFiredMinute[i] = -1;
+    s_jitterBaseMin[i] = -1;
+    s_jitterTargetMin[i] = -1;
+  }
 }
 
 void alarm_set_callbacks(AlarmRingCb onRing, AlarmSilenceCb onSilence) {
@@ -62,16 +101,26 @@ void alarm_task() {
 
   if (clock_valid()) {
     time_t local = clock_now_local();
-    int year, mon, day, hour, min, sec, wday;
-    epoch_to_tm(local, year, mon, day, hour, min, sec, wday);
     int32_t curMinute = (int32_t)(local / 60);
 
     for (uint8_t i = 0; i < NUM_ALARMS; i++) {
       const AlarmConfig &a = settings().alarms[i];
       if (!a.enabled)
         continue;
-      uint8_t mask = a.daysMask ? a.daysMask : 0x7F; // no days selected = daily
-      if (hour != a.hour || min != a.minute || !((mask >> wday) & 1))
+      // The fire target is the nominal occurrence plus a per-occurrence
+      // random offset of +-jitterMinutes (0 = exact, the classic behavior).
+      // The nominal is computed from `local - jitter` so it stays stable
+      // through the whole +-window; a new occurrence rolls a new offset.
+      uint8_t J = a.jitterMinutes;
+      int32_t nom = nominal_minute_for(i, local - (time_t)J * 60);
+      if (nom < 0)
+        continue;
+      if (s_jitterBaseMin[i] != nom) {
+        s_jitterBaseMin[i] = nom;
+        int32_t off = J ? ((int32_t)(trng_random() % (2u * J + 1u)) - J) : 0;
+        s_jitterTargetMin[i] = nom + off;
+      }
+      if (curMinute != s_jitterTargetMin[i])
         continue;
       if (s_lastFiredMinute[i] == curMinute)
         continue;

@@ -102,6 +102,11 @@ snooze re-rings and buzzer escalation at full volume; packed into spare alarm
 flag bits, EEPROM v3). New **Volume slider** on "Disp & sound" (the setting
 previously had no UI control). Amp fault/thermal status on System info.
 
+**Random alarm trigger:** per-alarm "Random" (Off/±1/±5/±9 min) — each
+occurrence fires at a fresh hardware-TRNG offset around the set time (absolute
+-minute targeting, so windows cross hour/day boundaries). Display keeps
+showing the nominal time. Packed into spare alarm-flag bits (no EEPROM cost).
+
 **Docs:** README refreshed to current reality; this STATUS report added.
 
 ---

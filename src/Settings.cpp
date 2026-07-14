@@ -46,8 +46,17 @@ enum : uint8_t {
   OFF_CHECKSUM = 39,
 };
 #define V1_LEN 39 // v1 image: 38-byte payload, checksum at offset 38
-// alarm flags byte: b0 enabled, b1-2 gentle-wake ramp index (see kRampSecs)
+// alarm flags byte: b0 enabled, b1-2 gentle-wake ramp index (see kRampSecs),
+// b3-4 random-jitter index (see kJitterMin; older v3 images have 00 = off,
+// which reads back compatibly - no version bump needed)
 static const uint8_t kRampSecs[4] = {0, 15, 30, 60};
+static const uint8_t kJitterMin[4] = {0, 1, 5, 9};
+static uint8_t jitter_idx(uint8_t m) {
+  for (uint8_t i = 3; i > 0; i--)
+    if (m >= kJitterMin[i])
+      return i;
+  return 0;
+}
 static uint8_t ramp_idx(uint8_t secs) {
   for (uint8_t i = 3; i > 0; i--)
     if (secs >= kRampSecs[i])
@@ -127,7 +136,8 @@ static void pack(const Settings &in, uint8_t out[PACK_LEN]) {
   for (uint8_t i = 0; i < NUM_ALARMS; i++) {
     uint8_t *a = &out[i == 0 ? OFF_ALARM0 : OFF_ALARM1];
     const AlarmConfig &ac = in.alarms[i];
-    a[0] = (uint8_t)((ac.enabled ? 1 : 0) | (ramp_idx(ac.rampSeconds) << 1));
+    a[0] = (uint8_t)((ac.enabled ? 1 : 0) | (ramp_idx(ac.rampSeconds) << 1) |
+                     (jitter_idx(ac.jitterMinutes) << 3));
     a[1] = ac.hour;
     a[2] = ac.minute;
     a[3] = ac.daysMask;
@@ -184,6 +194,7 @@ static void unpack(const uint8_t in[PACK_LEN], Settings &out) {
     AlarmConfig &ac = out.alarms[i];
     ac.enabled = a[0] & 1;
     ac.rampSeconds = kRampSecs[(a[0] >> 1) & 3];
+    ac.jitterMinutes = kJitterMin[(a[0] >> 3) & 3];
     ac.hour = a[1] <= 23 ? a[1] : 7;
     ac.minute = a[2] <= 59 ? a[2] : 0;
     ac.daysMask = a[3] & 0x7F;
@@ -230,6 +241,7 @@ void settings_defaults() {
   s.alarms[0].tune[0] = '\0';
   s.alarms[0].melodyId = 0;
   s.alarms[0].rampSeconds = 30;
+  s.alarms[0].jitterMinutes = 0;
 
   s.alarms[1].enabled = false;
   s.alarms[1].hour = 9;
@@ -238,6 +250,7 @@ void settings_defaults() {
   s.alarms[1].tune[0] = '\0';
   s.alarms[1].melodyId = 2;
   s.alarms[1].rampSeconds = 30;
+  s.alarms[1].jitterMinutes = 0;
 
   s.volume = 7;
   s.snoozeMinutes = 9;

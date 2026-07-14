@@ -21,6 +21,10 @@ bench-found reason.
   snooze re-ring; auto-silence after 15 min.
 - Every snooze increments the persisted **shame counter** (week + total),
   shown on the ringing screen and System info.
+- **Random trigger** (per alarm, ±1/±5/±9 min): each occurrence rolls a fresh
+  offset from the SAMD51's hardware TRNG; the target is an absolute
+  local-epoch minute so the window crosses hour/day boundaries correctly,
+  and the UI keeps showing the nominal time (no cheating).
 
 ## Consequences
 Predictable wake-up behavior with the failure modes (vibration self-snooze,
