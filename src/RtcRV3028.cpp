@@ -61,8 +61,8 @@ static bool eeprom_set_eerd(bool on) {
   return write_reg_raw(RV3028_CTRL1, c1);
 }
 
-// One user-EEPROM byte op: cmd = EEPROMCMD_ReadSingle / _WriteSingle.
-static bool eeprom_byte_op(uint8_t cmd, uint8_t addr, uint8_t &data) {
+// One user-EEPROM byte op attempt: cmd = EEPROMCMD_ReadSingle / _WriteSingle.
+static bool eeprom_byte_attempt(uint8_t cmd, uint8_t addr, uint8_t &data) {
   if (!eeprom_wait_ready())
     return false;
   if (!write_reg_raw(RV3028_EEPROM_ADDR, addr))
@@ -78,6 +78,27 @@ static bool eeprom_byte_op(uint8_t cmd, uint8_t addr, uint8_t &data) {
   if (cmd == EEPROMCMD_ReadSingle && !read_reg_raw(RV3028_EEPROM_DATA, data))
     return false;
   return true;
+}
+
+// Robust byte op: the chip transiently NACKs register writes in a short
+// window after a previous EEPROM programming cycle (seen on the bench as a
+// NACKed EEDATA write right after a successful byte), so retry a few times
+// with a small backoff. Writes are additionally verified by reading the byte
+// back — at our save rates (a handful of bytes, a few times a day) the extra
+// read is free insurance.
+static bool eeprom_byte_op(uint8_t cmd, uint8_t addr, uint8_t &data) {
+  for (uint8_t attempt = 0; attempt < 5; attempt++) {
+    if (attempt)
+      delay(3);
+    if (!eeprom_byte_attempt(cmd, addr, data))
+      continue;
+    if (cmd != EEPROMCMD_WriteSingle)
+      return true;
+    uint8_t back = (uint8_t)~data;
+    if (eeprom_byte_attempt(EEPROMCMD_ReadSingle, addr, back) && back == data)
+      return true;
+  }
+  return false;
 }
 
 static bool eeprom_span(bool write, uint8_t addr, uint8_t *buf, uint8_t n) {
