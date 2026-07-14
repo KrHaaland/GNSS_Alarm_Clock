@@ -12,8 +12,9 @@ a gentle volume ramp.
 Enable the chip's **AGC at 1:4 compression** so program material is leveled
 toward the output ceiling. With AGC active the **output limiter level is the
 real volume control**, so:
-- volume 0–10 maps to the limiter level (0.5 dBV steps, ceiling +6.5 dBV
-  until the speaker's rating justifies more; register max +9 dBV),
+- volume 0–10 maps to the limiter level across its FULL range: v1 = −6.5 dBV
+  (~28 mW into 8 Ω) … v10 = +9 dBV (~1.0 W, chip max; the 8 Ω speaker
+  handles it),
 - fixed gain stays constant (+6 dB into the AGC),
 - the digital (DAC) volume is pinned high — it would otherwise be undone by
   the AGC,
@@ -26,5 +27,7 @@ real volume control**, so:
 - All tunes play at comparable loudness regardless of mastering.
 - Wake-up starts gentle but cannot be slept through (re-ring + escalation
   bypass the ramp).
-- Volume perception is now tied to the limiter: revisit the ceiling
-  (`LIMITER_MAX_STEP`) once the speaker's power handling is confirmed.
+- Volume perception is now tied to the limiter. The floor cannot go below
+  the chip's −6.5 dBV while AGC leveling is active (the AGC lifts material
+  toward the ceiling regardless of input gain) — a true whisper mode would
+  need compression disabled at low volumes.

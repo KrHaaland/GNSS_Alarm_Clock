@@ -32,10 +32,10 @@
 // Max AGC gain 30 dB (field = dB-18 = 12), compression ratio 1:4 (10b) to
 // even out differently-mastered WAVs.
 #define AGC2_VALUE 0xC2
-// Limiter ceiling at volume 10, in half-dBV register steps from -6.5 dBV.
-// 26 = +6.5 dBV (chip POR level) — conservative until the speaker's power
-// rating is confirmed; the register allows up to 31 (+9 dBV).
-#define LIMITER_MAX_STEP 26
+// Volume 1..10 spans the limiter's FULL range: -6.5 dBV (step 0, ~28 mW into
+// the 8 ohm speaker) up to +9 dBV (step 31, ~1.0 W — chip maximum; the
+// speaker is 8 ohm and handles it). ~1.7 dB per volume step; volume 0 = mute.
+#define LIMITER_MAX_STEP 31
 // Noise-gate threshold bits (01 = 4 mV).
 #define NG_BITS 0x20
 
@@ -66,9 +66,11 @@ static bool read_reg(uint8_t reg, uint8_t &val) {
   return true;
 }
 
-// vol 1..10 -> limiter level register step (0..LIMITER_MAX_STEP).
+// vol 1..10 -> limiter level register step: v1 = 0 (-6.5 dBV), v10 = 31 (+9).
 static uint8_t limiter_step_for(uint8_t vol) {
-  return (uint8_t)(((uint16_t)vol * LIMITER_MAX_STEP) / 10);
+  if (vol <= 1)
+    return 0;
+  return (uint8_t)(((uint16_t)(vol - 1) * LIMITER_MAX_STEP) / 9);
 }
 
 static void write_limiter(uint8_t step) {

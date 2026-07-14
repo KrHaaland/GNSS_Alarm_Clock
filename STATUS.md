@@ -98,7 +98,8 @@ reboot and reflash.**
 volume 0–10 now maps to the output limiter (0.5 dB steps), **gentle-wake
 ramp** (menu "Ramp": Off/15/30/60 s — first ring only; re-rings and buzzer
 escalation at full volume), amp fault/thermal status on System info.
-Limiter ceiling conservative (+6.5 dBV) until the speaker rating is known.
+Volume spans the limiter's full range: v1 = −6.5 dBV (~28 mW) … v10 = +9 dBV
+(~1.0 W into the 8 Ω speaker, chip max).
 
 **Docs:** README refreshed to current reality; this STATUS report added.
 
