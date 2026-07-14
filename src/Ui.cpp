@@ -1127,7 +1127,11 @@ static void dropdown_overlay(lv_obj_t *dd) {
   if (h > DISP_H)
     h = DISP_H;
   lv_obj_set_height(list, h);
-  lv_obj_set_y(list, 0);
+  // y in CONTENT coordinates: the settings screens scroll, so "top of the
+  // visible viewport" = the parent's current scroll offset, not 0. (Found
+  // the hard way: lists opened from scrolled-down rows appeared off-glass.)
+  lv_obj_t *par = lv_obj_get_parent(list);
+  lv_obj_set_y(list, par ? lv_obj_get_scroll_y(par) : 0);
   lv_obj_update_layout(list);
   lv_obj_t *label = lv_obj_get_child(list, 0); // options live in one label
   const lv_font_t *font = lv_obj_get_style_text_font(list, LV_PART_MAIN);
