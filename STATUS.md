@@ -95,11 +95,12 @@ per-byte retry & read-back verify. **User-verified: settings survive both
 reboot and reflash.**
 
 **Amp (TPA2016) rework:** AGC 1:4 loudness leveling (all tunes comparable),
-volume 0–10 now maps to the output limiter (0.5 dB steps), **gentle-wake
-ramp** (menu "Ramp": Off/15/30/60 s — first ring only; re-rings and buzzer
-escalation at full volume), amp fault/thermal status on System info.
-Volume spans the limiter's full range: v1 = −6.5 dBV (~28 mW) … v10 = +9 dBV
-(~1.0 W into the 8 Ω speaker, chip max).
+volume 0–10 maps to the output limiter across its full range — v1 = −6.5 dBV
+(~28 mW) … v10 = +9 dBV (~1.0 W into the 8 Ω speaker, chip max). **Gentle-wake
+ramp is per alarm** (alarm editor "Ramp": Off/15/30/60 s — first ring only;
+snooze re-rings and buzzer escalation at full volume; packed into spare alarm
+flag bits, EEPROM v3). New **Volume slider** on "Disp & sound" (the setting
+previously had no UI control). Amp fault/thermal status on System info.
 
 **Docs:** README refreshed to current reality; this STATUS report added.
 
