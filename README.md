@@ -97,13 +97,48 @@ QSPI serial flash. The firmware uses the **QSPI flash** (exposed as the USB
 drive): far larger, faster, on the standard Metro M4 QSPI pins, and it enables
 the drag-and-drop workflow.
 
-**Settings** are packed into the **RV-3028 RTC's 43-byte user EEPROM**
-(39-byte image: coordinates instead of TZ strings, filename hashes instead of
-tune names — see `Settings.cpp`). Chosen because it survives **firmware
-reflashes** (the old internal-flash emulation sat inside the app image and was
-wiped on every update), takes ~100k writes/byte, and frees the **24LC512 to be
-dropped from the hardware-v2 BOM** (it still ACKs at 0x50 on v1 boards,
-unused).
+**Settings** are packed into the **RV-3028 RTC's 43-byte user EEPROM**.
+Chosen because it survives **firmware reflashes** (the old internal-flash
+emulation sat inside the app image and was wiped on every update), takes
+~100k writes/byte, and frees the **24LC512 to be dropped from the hardware-v2
+BOM** (it still ACKs at 0x50 on v1 boards, unused). Verified on hardware:
+settings survive both power cycles and reflashes.
+
+### RTC user-EEPROM memory map (39 of 43 bytes)
+
+Space is won by not storing derived data: TZ strings re-derive at boot from
+the stored position (or the manual GMT-ladder index), and alarm tune filenames
+are stored as 16-bit FNV-1a hashes re-matched against the TUNES directory
+(missing file → builtin melody). Multi-byte fields are little-endian.
+
+| Addr | Size | Field |
+|---|---|---|
+| `0x00` | 2 | Magic `'G' 'C'` |
+| `0x02` | 1 | Pack-format version (1) |
+| `0x03` | 1 | Flags: b0 tzAuto, b1 tapSnooze, b2 use24h, b3 havePosition, b4–5 mode |
+| `0x04` | 2 | Latitude, centidegrees (i16) |
+| `0x06` | 2 | Longitude, centidegrees (i16) |
+| `0x08` | 1 | Manual zone index into `TZ_TABLE` (`0xFF` = none/auto) |
+| `0x09` | 1 | Volume (0–10) |
+| `0x0A` | 1 | Snooze minutes |
+| `0x0B` | 1 | Buzzer escalation after N min (0 = off) |
+| `0x0C` | 1 | Brightness |
+| `0x0D` | 2 | Dim timeout, seconds (u16) |
+| `0x0F` | 1 | Dim brightness |
+| `0x10` | 4 | Snooze counter, all time (u32) |
+| `0x14` | 2 | Snooze counter, this week (u16) |
+| `0x16` | 2 | Week start, local epoch-day − 18262 (u16, base 2020-01-01) |
+| `0x18` | 7 | Alarm 1: flags (b0 enabled), hour, minute, daysMask, melodyId, tuneHash (u16) |
+| `0x1F` | 7 | Alarm 2: same layout |
+| `0x26` | 1 | Checksum (block sums to `0xFF`) — **written last**, so a torn write invalidates the image |
+| `0x27` | 4 | Free / future |
+
+> **RV-3028 EEPROM quirks (bench-found, handled in `RtcRV3028.cpp`):** the
+> chip **NACKs all I²C** while its EEPROM engine runs — both during the
+> power-on auto-refresh (>100 ms) and in short windows after each programmed
+> byte. The driver therefore treats failed STATUS reads as "still busy"
+> (300 ms deadline), retries each byte transaction up to 5×, and read-back
+> verifies every written byte.
 
 > **Flash BOM note:** the schematic specifies a 4 MB Macronix MX25L3233F, but
 > assembled boards carry a **16 MB Winbond W25Q128** (JEDEC 0xEF4018). The driver

@@ -24,7 +24,7 @@ on the RTC (below); it does not stop the clock from working off GNSS.
 | Audio (DAC→TPA2016) | ✅ Working | WAV + 3 melodies, digital + amp volume |
 | LEDs (3 sections) | ✅ Working | Chase/blink from supercap rail |
 | Tunes over USB | ✅ Working | QSPI flash as `TUNES` drive (16 MB) |
-| Settings persistence | ✅ Working | Internal flash (emulated EEPROM) |
+| Settings persistence | ✅ Working | RV-3028 user EEPROM (39 B packed) — survives reboot **and reflash** (verified) |
 | UI (8 screens) | ✅ Working | 4-button nav, true-black theme |
 
 ---
@@ -85,10 +85,14 @@ must be SWD-flashed until a J20 UF2 bootloader is built.
 
 **Settings storage moved to the RV-3028 user EEPROM** (packed 39-byte image;
 coordinates instead of TZ strings, tune-name hashes matched against the TUNES
-dir at boot). Survives firmware reflashes — the old FlashStorage emulation sat
-inside the app image and was wiped on every update — and has 4x the write
-endurance. FlashStorage_SAMD dropped (flash 95.6% -> 93.3%); the 24LC512 is
-now unused and **leaves the BOM in hardware v2**.
+dir at boot; memory map in README). Survives firmware reflashes — the old
+FlashStorage emulation sat inside the app image and was wiped on every update
+— and has 4x the write endurance. FlashStorage_SAMD dropped (flash 95.6% ->
+93.3%); the 24LC512 is now unused and **leaves the BOM in hardware v2**.
+Bring-up found two RV-3028 quirks (chip NACKs I2C during EEPROM busy at POR
+and in windows after each programmed byte) — fixed with tolerant busy-wait +
+per-byte retry & read-back verify. **User-verified: settings survive both
+reboot and reflash.**
 
 **Docs:** README refreshed to current reality; this STATUS report added.
 
