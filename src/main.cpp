@@ -64,8 +64,8 @@ static void start_ringing(int8_t idx, bool escalated) {
     // set by the amp's limiter (amp_set_volume/amp_ramp_to). See ADR-0010.
     audio_set_volume(10);
     amp_enable(true);
-    if (!alarm_fire_was_rering() && settings().rampSeconds > 0)
-      amp_ramp_to(settings().volume, settings().rampSeconds); // gentle wake
+    if (!alarm_fire_was_rering() && a.rampSeconds > 0)
+      amp_ramp_to(settings().volume, a.rampSeconds); // gentle wake (per alarm)
     else
       amp_set_volume(settings().volume); // re-ring: no mercy
     bool ok = false;

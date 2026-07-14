@@ -35,20 +35,20 @@ Dropdown lists open as a full-screen overlay with the current choice centered.
 
 | Item | What it does |
 |---|---|
-| Alarm 1 / Alarm 2 | Enable switch, time rollers, weekday matrix (S M T W T F S — **no days selected = every day**), tune dropdown, Test, Save. *Back does not save.* |
+| Alarm 1 / Alarm 2 | Enable switch, time rollers, weekday matrix (S M T W T F S — **no days selected = every day**), tune dropdown, **Ramp** (per-alarm gentle wake: Off/15/30/60 s), Test, Save. *Back does not save.* |
 | Time & zone | **Auto TZ (GNSS)** on/off; manual **Zone** = the full GMT ladder (GMT−12…+14 incl. half/quarter hours, fixed offsets, no DST); 24 h switch; **Sync now**. |
 | Disp & sound | **Volume** (0–10, live while a tune plays), brightness slider (live), dim-after timeout, dim level. |
 | Tunes | Preview built-in melodies and WAVs from the TUNES drive (press again to stop). Unavailable while the USB host owns the drive. |
 | System info | Fix/sats/HDOP, position, speed/altitude, zone + POSIX string, UTC offset/DST, GNSS sync age, RTC status, caps status, **snooze counters**, FW version. Scroll with B2/B3. |
 | Tap snooze | Toggle double-tap-to-snooze. |
-| Ramp | Gentle wake: the first ring fades in over Off/15/30/60 s. Snooze re-rings and buzzer escalation play at full volume immediately. |
 | Mode | Cycles the main screen: **Alarm clock → Speedometer → Altimeter → Game mode**. |
 | Back | To the clock. |
 
 ## Alarms
 
 - On trigger: LED chase + the chosen tune (WAV, else built-in melody) —
-  fading in over the configured **Ramp** time on the first ring. Tunes play
+  fading in over the alarm's own **Ramp** setting on the first ring (snooze
+  re-rings and buzzer escalation play at full volume immediately). Tunes play
   at comparable loudness regardless of how the WAV was mastered (AGC).
   After the configured minutes unacknowledged, the power buzzer joins in.
   Auto-silence after 15 min; the alarm re-arms for its next day.

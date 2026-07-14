@@ -25,7 +25,7 @@
 // --- packed image layout -----------------------------------------------------
 #define PACK_MAGIC0 'G'
 #define PACK_MAGIC1 'C'
-#define PACK_VERSION 2 // v2: + rampSeconds (v1 blocks migrate in place)
+#define PACK_VERSION 3 // v3: per-alarm ramp in the alarm flag bits (b1-2)
 #define PACK_LEN 40           // incl. trailing checksum; <= RTC_USER_EEPROM_SIZE
 #define EPOCH2020_DAYS 18262u // 2020-01-01 in unix epoch-days (weekStart base)
 
@@ -42,10 +42,18 @@ enum : uint8_t {
   OFF_SNZWEEKSTART = 22, // u16, local epoch-day - EPOCH2020_DAYS
   OFF_ALARM0 = 24,     // 7 B each: flags,hour,min,mask,melody,hash(u16)
   OFF_ALARM1 = 31,
-  OFF_RAMP = 38,       // gentle-wake ramp seconds (added in v2)
+  OFF_RESERVED = 38,   // was the global ramp byte in v2; now spare (0)
   OFF_CHECKSUM = 39,
 };
-#define V1_LEN 39 // v1 image: no ramp byte, checksum at offset 38
+#define V1_LEN 39 // v1 image: 38-byte payload, checksum at offset 38
+// alarm flags byte: b0 enabled, b1-2 gentle-wake ramp index (see kRampSecs)
+static const uint8_t kRampSecs[4] = {0, 15, 30, 60};
+static uint8_t ramp_idx(uint8_t secs) {
+  for (uint8_t i = 3; i > 0; i--)
+    if (secs >= kRampSecs[i])
+      return i;
+  return 0;
+}
 // flags byte: b0 tzAuto, b1 tapSnooze, b2 use24h, b3 havePosition, b4-5 mode
 // alarm flags byte: b0 enabled
 
@@ -119,14 +127,14 @@ static void pack(const Settings &in, uint8_t out[PACK_LEN]) {
   for (uint8_t i = 0; i < NUM_ALARMS; i++) {
     uint8_t *a = &out[i == 0 ? OFF_ALARM0 : OFF_ALARM1];
     const AlarmConfig &ac = in.alarms[i];
-    a[0] = ac.enabled ? 1 : 0;
+    a[0] = (uint8_t)((ac.enabled ? 1 : 0) | (ramp_idx(ac.rampSeconds) << 1));
     a[1] = ac.hour;
     a[2] = ac.minute;
     a[3] = ac.daysMask;
     a[4] = ac.melodyId;
     put16(&a[5], tune_hash(ac.tune));
   }
-  out[OFF_RAMP] = in.rampSeconds;
+  out[OFF_RESERVED] = 0;
   out[OFF_CHECKSUM] = checksum(out, OFF_CHECKSUM);
 }
 
@@ -171,11 +179,11 @@ static void unpack(const uint8_t in[PACK_LEN], Settings &out) {
   out.snoozeTotal = get32(&in[OFF_SNZTOTAL]);
   out.snoozeWeek = get16(&in[OFF_SNZWEEK]);
   out.snoozeWeekStart = EPOCH2020_DAYS + get16(&in[OFF_SNZWEEKSTART]);
-  out.rampSeconds = in[OFF_RAMP] <= 60 ? in[OFF_RAMP] : 30;
   for (uint8_t i = 0; i < NUM_ALARMS; i++) {
     const uint8_t *a = &in[i == 0 ? OFF_ALARM0 : OFF_ALARM1];
     AlarmConfig &ac = out.alarms[i];
     ac.enabled = a[0] & 1;
+    ac.rampSeconds = kRampSecs[(a[0] >> 1) & 3];
     ac.hour = a[1] <= 23 ? a[1] : 7;
     ac.minute = a[2] <= 59 ? a[2] : 0;
     ac.daysMask = a[3] & 0x7F;
@@ -221,6 +229,7 @@ void settings_defaults() {
   s.alarms[0].daysMask = 0x3E; // Mon..Fri
   s.alarms[0].tune[0] = '\0';
   s.alarms[0].melodyId = 0;
+  s.alarms[0].rampSeconds = 30;
 
   s.alarms[1].enabled = false;
   s.alarms[1].hour = 9;
@@ -228,9 +237,9 @@ void settings_defaults() {
   s.alarms[1].daysMask = 0x41; // Sat+Sun
   s.alarms[1].tune[0] = '\0';
   s.alarms[1].melodyId = 2;
+  s.alarms[1].rampSeconds = 30;
 
   s.volume = 7;
-  s.rampSeconds = 30;
   s.snoozeMinutes = 9;
   s.buzzerAfterMin = 5;
   s.tapSnooze = true;
@@ -263,13 +272,25 @@ void settings_begin() {
     resolve_tunes();
     memcpy(lastPacked, img, PACK_LEN);
     haveLast = true;
+  } else if (magicOk && img[OFF_VERSION] == 2 &&
+             img[OFF_CHECKSUM] == checksum(img, OFF_CHECKSUM)) {
+    // v2 -> v3: the global ramp byte (old offset 38) moves into each alarm's
+    // flag bits. Copy it to both alarms, then persist as v3.
+    uint8_t rampBits = (uint8_t)(ramp_idx(img[OFF_RESERVED] <= 60
+                                              ? img[OFF_RESERVED] : 30) << 1);
+    img[OFF_ALARM0] = (uint8_t)((img[OFF_ALARM0] & 1) | rampBits);
+    img[OFF_ALARM1] = (uint8_t)((img[OFF_ALARM1] & 1) | rampBits);
+    unpack(img, s);
+    resolve_tunes();
+    haveLast = false;
+    settings_save();
   } else if (magicOk && img[OFF_VERSION] == 1 &&
              img[V1_LEN - 1] == checksum(img, V1_LEN - 1)) {
-    // v1 -> v2: the ramp byte was appended before the checksum. Take the v1
-    // fields as-is, default the ramp, persist as v2.
-    img[OFF_RAMP] = 0xFF; // force default in unpack's range check
+    // v1 -> v3: no ramp stored anywhere; default 30 s on both alarms.
+    uint8_t rampBits = (uint8_t)(ramp_idx(30) << 1);
+    img[OFF_ALARM0] = (uint8_t)((img[OFF_ALARM0] & 1) | rampBits);
+    img[OFF_ALARM1] = (uint8_t)((img[OFF_ALARM1] & 1) | rampBits);
     unpack(img, s);
-    s.rampSeconds = 30;
     resolve_tunes();
     haveLast = false;
     settings_save();

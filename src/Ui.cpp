@@ -64,16 +64,15 @@ static char s_cStatL[24], s_cStatR[24];
 static char s_cBig[12], s_cSec[8], s_cAmpm[8], s_cBottom[72];
 
 // Menu
-static lv_obj_t *s_fMenu[10];
+static lv_obj_t *s_fMenu[9];
 static lv_obj_t *s_tapLabel;  // "Tap snooze: On/Off" toggle item label
 static lv_obj_t *s_modeLabel; // "Mode: ..." cycle item label
-static lv_obj_t *s_rampLabel; // "Ramp: ..." cycle item label
 
 // AlarmEdit
 static int8_t s_alarmIdx;
 static lv_obj_t *s_alTitle, *s_alEnable, *s_alHour, *s_alMin, *s_alDays;
-static lv_obj_t *s_alTune, *s_alTest, *s_alSave;
-static lv_obj_t *s_fAlarm[7];
+static lv_obj_t *s_alTune, *s_alRamp, *s_alTest, *s_alSave;
+static lv_obj_t *s_fAlarm[8];
 
 // Time & zone
 static lv_obj_t *s_tzAuto, *s_tzZone, *s_tz24, *s_tzSync, *s_tzInfo;
@@ -108,6 +107,8 @@ static const char *DAYS_MAP[8] = {"S", "M", "T", "W", "T", "F", "S", ""};
 
 
 static const char DIM_OPTS[] = "Never\n15 s\n30 s\n1 min\n5 min";
+static const char RAMP_OPTS[] = "Off\n15 s\n30 s\n60 s";
+static const uint8_t RAMP_SECONDS[4] = {0, 15, 30, 60};
 static const uint16_t DIM_SECONDS[5] = {0, 15, 30, 60, 300};
 
 // Roller option strings, built once in ui_begin (no heap).
@@ -498,9 +499,9 @@ static void make_clock() {
 // ------------------------------------------------------------- Menu scr ---
 enum : uint8_t {
   MENU_ALARM1, MENU_ALARM2, MENU_TZ, MENU_DISPLAY, MENU_TUNES, MENU_SYSINFO,
-  MENU_TAPSNOOZE, MENU_MODE, MENU_RAMP, MENU_BACK
+  MENU_TAPSNOOZE, MENU_MODE, MENU_BACK
 };
-#define MENU_COUNT 10
+#define MENU_COUNT 9
 
 static void menu_refresh_tapsnooze() {
   if (s_tapLabel)
@@ -517,15 +518,6 @@ static void menu_refresh_mode() {
                           MODE_NAMES[settings().mode % MODE_COUNT]);
 }
 
-static void menu_refresh_ramp() {
-  if (!s_rampLabel)
-    return;
-  if (settings().rampSeconds == 0)
-    lv_label_set_text_static(s_rampLabel, "Ramp: Off");
-  else
-    lv_label_set_text_fmt(s_rampLabel, "Ramp: %u s",
-                          (unsigned)settings().rampSeconds);
-}
 
 static void menu_btn_cb(lv_event_t *e) {
   uint8_t id = (uint8_t)(uintptr_t)lv_event_get_user_data(e);
@@ -546,13 +538,6 @@ static void menu_btn_cb(lv_event_t *e) {
     settings_save();
     menu_refresh_mode();
     break;
-  case MENU_RAMP: { // gentle-wake ramp: Off -> 15 -> 30 -> 60 s
-    uint8_t r = settings().rampSeconds;
-    settings().rampSeconds = (r == 0) ? 15 : (r == 15) ? 30 : (r == 30) ? 60 : 0;
-    settings_save();
-    menu_refresh_ramp();
-    break;
-  }
   default:           load_screen(SCR_CLOCK); break;
   }
 }
@@ -579,7 +564,7 @@ static void make_menu() {
 
   static const char *const NAMES[MENU_COUNT] = {
       "Alarm 1", "Alarm 2",    "Time & zone", "Disp & sound", "Tunes",
-      "System info", "Tap snooze", "Mode",    "Ramp",    "Back"};
+      "System info", "Tap snooze", "Mode",    "Back"};
   for (uint8_t i = 0; i < MENU_COUNT; i++)
     s_fMenu[i] = list_add_item(list, NULL, NAMES[i], menu_btn_cb, i);
 
@@ -588,8 +573,6 @@ static void make_menu() {
   menu_refresh_tapsnooze();
   s_modeLabel = lv_obj_get_child(s_fMenu[MENU_MODE], 0);
   menu_refresh_mode();
-  s_rampLabel = lv_obj_get_child(s_fMenu[MENU_RAMP], 0);
-  menu_refresh_ramp();
 }
 
 // -------------------------------------------------------- AlarmEdit scr ---
@@ -612,6 +595,7 @@ static void alarm_save_cb(lv_event_t *e) {
     strncpy(a.tune, s_tuneNames[sel - AUDIO_MELODY_COUNT], TUNE_NAME_LEN - 1);
     a.tune[TUNE_NAME_LEN - 1] = '\0';
   }
+  a.rampSeconds = RAMP_SECONDS[lv_dropdown_get_selected(s_alRamp) & 3];
   settings_save();
   preview_stop();
   load_screen(SCR_MENU);
@@ -651,6 +635,11 @@ static void alarm_sync_widgets() {
         break;
       }
   lv_dropdown_set_selected(s_alTune, sel);
+  uint16_t ri = 0;
+  for (uint8_t i = 0; i < 4; i++)
+    if (a.rampSeconds >= RAMP_SECONDS[i])
+      ri = i;
+  lv_dropdown_set_selected(s_alRamp, ri);
 }
 
 static void make_alarm() {
@@ -691,6 +680,14 @@ static void make_alarm() {
                              &lv_font_montserrat_12, 0);
   blacken(lv_dropdown_get_list(s_alTune)); // popup list is off-screen tree
 
+  row = make_row(scr, "Ramp");
+  s_alRamp = lv_dropdown_create(row);
+  lv_dropdown_set_options_static(s_alRamp, RAMP_OPTS);
+  lv_obj_set_width(s_alRamp, 100);
+  lv_obj_set_style_text_font(lv_dropdown_get_list(s_alRamp),
+                             &lv_font_montserrat_12, 0);
+  blacken(lv_dropdown_get_list(s_alRamp));
+
   row = make_row(scr, NULL);
   s_alTest = lv_button_create(row);
   lv_obj_t *l = lv_label_create(s_alTest);
@@ -701,9 +698,9 @@ static void make_alarm() {
   lv_obj_add_event_cb(s_alTest, alarm_test_cb, LV_EVENT_CLICKED, NULL);
   lv_obj_add_event_cb(s_alSave, alarm_save_cb, LV_EVENT_CLICKED, NULL);
 
-  lv_obj_t *foc[7] = {s_alEnable, s_alHour, s_alMin, s_alDays,
-                      s_alTune,   s_alTest, s_alSave};
-  for (uint8_t i = 0; i < 7; i++) {
+  lv_obj_t *foc[8] = {s_alEnable, s_alHour, s_alMin, s_alDays,
+                      s_alTune,   s_alRamp, s_alTest, s_alSave};
+  for (uint8_t i = 0; i < 8; i++) {
     s_fAlarm[i] = foc[i];
     lv_obj_add_flag(foc[i], LV_OBJ_FLAG_SCROLL_ON_FOCUS);
   }
@@ -1073,10 +1070,9 @@ static void load_screen(UiScreen id) {
   case SCR_MENU:
     menu_refresh_tapsnooze();
     menu_refresh_mode();
-    menu_refresh_ramp();
     group_set(s_fMenu, MENU_COUNT);
     break;
-  case SCR_ALARM: alarm_sync_widgets(); group_set(s_fAlarm, 7); break;
+  case SCR_ALARM: alarm_sync_widgets(); group_set(s_fAlarm, 8); break;
   case SCR_TZ:    tz_sync_widgets(); group_set(s_fTz, 4); break;
   case SCR_DISP:  disp_sync_widgets(); group_set(s_fDisp, 4); break;
   case SCR_TUNES:

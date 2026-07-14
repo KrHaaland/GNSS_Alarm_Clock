@@ -19,8 +19,9 @@ real volume control**, so:
 - the digital (DAC) volume is pinned high — it would otherwise be undone by
   the AGC,
 - **gentle wake**: on an alarm's first ring the limiter ramps from minimum to
-  the set volume over 0/15/30/60 s (menu: "Ramp"); snooze **re-rings skip the
-  ramp**, and buzzer escalation jumps straight to full volume,
+  the set volume over 0/15/30/60 s — configured **per alarm** in the alarm
+  editor (weekday alarm can fade in, weekend alarm can blast); snooze
+  **re-rings skip the ramp**, and buzzer escalation jumps to full volume,
 - the SETUP register's fault/thermal bits are surfaced on System info.
 
 ## Consequences

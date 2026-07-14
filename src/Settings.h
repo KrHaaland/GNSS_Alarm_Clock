@@ -26,6 +26,7 @@ struct AlarmConfig {
   uint8_t daysMask; // bit0=Sun .. bit6=Sat; 0x7F = every day
   char tune[TUNE_NAME_LEN]; // WAV filename in flash, or "" = builtin melody
   uint8_t melodyId;         // builtin melody when tune[0] == 0
+  uint8_t rampSeconds;      // gentle-wake fade-in 0/15/30/60 s (0 = off)
 };
 
 struct Settings {
@@ -47,7 +48,6 @@ struct Settings {
   AlarmConfig alarms[NUM_ALARMS];
 
   uint8_t volume;         // 0..10 master alarm volume
-  uint8_t rampSeconds;    // gentle-wake ramp 0/15/30/60 s (0 = off)
   uint8_t snoozeMinutes;  // default 9
   uint8_t buzzerAfterMin; // escalate to power buzzer after N min ringing, 0=off
   bool tapSnooze;         // LIS3DH tap = snooze while ringing
