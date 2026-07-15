@@ -51,7 +51,7 @@ Dropdown lists open as a full-screen overlay with the current choice centered.
   re-rings and buzzer escalation play at full volume immediately). Tunes play
   at comparable loudness regardless of how the WAV was mastered (AGC).
   After the configured minutes unacknowledged, the power buzzer joins in.
-  Auto-silence after 15 min; the alarm re-arms for its next day.
+  Auto-silence after 30 min; the alarm re-arms for its next day.
 - **Snooze**: short-press any button, or **double-tap the clock body**
   (if Tap snooze is on; taps are ignored the first 2 s of each ring).
   Default 9 minutes, then it re-rings.

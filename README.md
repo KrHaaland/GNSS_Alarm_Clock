@@ -55,7 +55,7 @@ a color TFT driven by four buttons.
   - a tune plays: a **WAV** from the QSPI flash drive, or one of 3 built-in
     melodies, via **DAC0 → TPA2016D2** class-D amp → speaker,
   - optional **escalation**: after *N* minutes unacknowledged, the power buzzer
-    joins in; auto-silence after 15 min.
+    joins in; auto-silence after 30 min.
   - **Snooze**: short-press any button, or double-tap the clock (LIS3DH).
     **Stop**: long-press any button.
 - **UI**: **LVGL 9.5** on an **ST7789 color TFT** (see below), driven by the 4

@@ -13,7 +13,7 @@
 #include <Arduino.h>
 #include <time.h>
 
-#define ALARM_MAX_RING_MIN 15
+#define ALARM_MAX_RING_MIN 30
 
 enum class AlarmState : uint8_t { Idle, Ringing, Snoozed };
 
