@@ -121,7 +121,7 @@ are stored as 16-bit FNV-1a hashes re-matched against the TUNES directory
 | Addr | Size | Field |
 |---|---|---|
 | `0x00` | 2 | Magic `'G' 'C'` |
-| `0x02` | 1 | Pack-format version (1) |
+| `0x02` | 1 | Pack-format version (3) |
 | `0x03` | 1 | Flags: b0 tzAuto, b1 tapSnooze, b2 use24h, b3 havePosition, b4–5 mode |
 | `0x04` | 2 | Latitude, centidegrees (i16) |
 | `0x06` | 2 | Longitude, centidegrees (i16) |
@@ -135,10 +135,11 @@ are stored as 16-bit FNV-1a hashes re-matched against the TUNES directory
 | `0x10` | 4 | Snooze counter, all time (u32) |
 | `0x14` | 2 | Snooze counter, this week (u16) |
 | `0x16` | 2 | Week start, local epoch-day − 18262 (u16, base 2020-01-01) |
-| `0x18` | 7 | Alarm 1: flags (b0 enabled), hour, minute, daysMask, melodyId, tuneHash (u16) |
+| `0x18` | 7 | Alarm 1: flags (b0 enabled, b1–2 ramp Off/15/30/60 s, b3–4 random ±0/1/5/9 min), hour, minute, daysMask, melodyId, tuneHash (u16) |
 | `0x1F` | 7 | Alarm 2: same layout |
-| `0x26` | 1 | Checksum (block sums to `0xFF`) — **written last**, so a torn write invalidates the image |
-| `0x27` | 4 | Free / future |
+| `0x26` | 1 | Reserved (was the global ramp byte in v2) |
+| `0x27` | 1 | Checksum (block sums to `0xFF`) — **written last**, so a torn write invalidates the image |
+| `0x28` | 3 | Free / future |
 
 > **RV-3028 EEPROM quirks (bench-found, handled in `RtcRV3028.cpp`):** the
 > chip **NACKs all I²C** while its EEPROM engine runs — both during the
