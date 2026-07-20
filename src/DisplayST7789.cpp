@@ -1,4 +1,6 @@
 // DisplayST7789.cpp — ST7789 color TFT driver + LVGL 9 glue. See header.
+// Compiled only when the build selects the v1 panel (see Display.h).
+#ifdef DISPLAY_ST7789
 #include "DisplayST7789.h"
 #include "pins.h"
 #include <SPI.h>
@@ -258,3 +260,5 @@ void display_power(bool on) {
 }
 
 void display_task() {}
+
+#endif // DISPLAY_ST7789

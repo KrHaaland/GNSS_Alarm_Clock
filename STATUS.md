@@ -16,7 +16,7 @@ on the RTC (below); it does not stop the clock from working off GNSS.
 
 | Subsystem | State | Notes |
 |---|---|---|
-| Display (ST7789) | ✅ Working | 284×76 landscape, 24 MHz, offsets 18/82, inversion off |
+| Display (NV3007) | ✅ Working | 428×142 landscape, vendor-page init, Y+14 offset, 24 MHz mode 0 |
 | GNSS time (L86) | ✅ Working | RMC+GGA @1 Hz, cold-start year-2080 guard |
 | Timezone + DST | ✅ Working | Offline coord→POSIX-TZ, persisted to flash |
 | RTC (RV-3028) | 🔴 HW fault | Not ACKing on I²C — reflow U5 (see §3) |
@@ -106,6 +106,14 @@ previously had no UI control). Amp fault/thermal status on System info.
 occurrence fires at a fresh hardware-TRNG offset around the set time (absolute
 -minute targeting, so windows cross hour/day boundaries). Display keeps
 showing the nominal time. Packed into spare alarm-flag bits (no EEPROM cost).
+
+**Display swapped to NV3007 (428×142):** new driver (vendor-page init is
+mandatory — without the 0xFF 0xA5 register dump the address engine wraps
+writes linearly), GRAM 168×428 with Y+14 landscape offset, SPI mode 0 @
+24 MHz, inversion off. Init cross-verified against five independent driver
+codebases (researched via web). Old ST7789 driver kept, selectable via
+DISPLAY SELECT in platformio.ini. UI scaled up for the doubled resolution
+(fonts 12→16/14/20, wider sliders/dropdowns, taller day-matrix).
 
 **Docs:** README refreshed to current reality; this STATUS report added.
 

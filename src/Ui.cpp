@@ -19,7 +19,7 @@
 #include "AudioEngine.h"
 #include "AmpTPA2016.h"
 #include "Leds.h"
-#include "DisplayST7789.h"
+#include "Display.h"
 #include "RtcRV3028.h"
 #include "Timezone.h"
 #include "TzTable.h"
@@ -255,7 +255,7 @@ static void show_msgbox(const char *title, const char *txt) {
   lv_msgbox_add_text(s_msgbox, txt);
   lv_msgbox_add_close_button(s_msgbox);
   lv_obj_set_width(s_msgbox, 210);
-  lv_obj_set_style_text_font(s_msgbox, &lv_font_montserrat_12, 0);
+  lv_obj_set_style_text_font(s_msgbox, &lv_font_montserrat_16, 0);
   lv_obj_center(s_msgbox);
   blacken(s_msgbox); // modal is created dynamically -> force black too
 }
@@ -344,8 +344,8 @@ static lv_obj_t *make_row(lv_obj_t *parent, const char *name) {
 static lv_obj_t *make_settings_screen() {
   lv_obj_t *scr = lv_obj_create(NULL);
   lv_obj_set_flex_flow(scr, LV_FLEX_FLOW_COLUMN);
-  lv_obj_set_style_pad_all(scr, 3, 0);
-  lv_obj_set_style_pad_row(scr, 3, 0);
+  lv_obj_set_style_pad_all(scr, 6, 0);
+  lv_obj_set_style_pad_row(scr, 6, 0);
   return scr;
 }
 
@@ -472,11 +472,11 @@ static void make_clock() {
   s_scr[SCR_CLOCK] = scr;
 
   s_ckStatL = lv_label_create(scr);
-  lv_obj_set_style_text_font(s_ckStatL, &lv_font_montserrat_12, 0);
+  lv_obj_set_style_text_font(s_ckStatL, &lv_font_montserrat_16, 0);
   lv_obj_align(s_ckStatL, LV_ALIGN_TOP_LEFT, 2, 0);
 
   s_ckStatR = lv_label_create(scr);
-  lv_obj_set_style_text_font(s_ckStatR, &lv_font_montserrat_12, 0);
+  lv_obj_set_style_text_font(s_ckStatR, &lv_font_montserrat_16, 0);
   lv_obj_align(s_ckStatR, LV_ALIGN_TOP_RIGHT, -2, 0);
 
   s_ckBig = lv_label_create(scr);
@@ -488,10 +488,10 @@ static void make_clock() {
   lv_obj_add_flag(s_ckSec, LV_OBJ_FLAG_HIDDEN); // seconds not shown
 
   s_ckAmpm = lv_label_create(scr);
-  lv_obj_set_style_text_font(s_ckAmpm, &lv_font_montserrat_12, 0);
+  lv_obj_set_style_text_font(s_ckAmpm, &lv_font_montserrat_20, 0);
 
   s_ckBottom = lv_label_create(scr);
-  lv_obj_set_style_text_font(s_ckBottom, &lv_font_montserrat_12, 0);
+  lv_obj_set_style_text_font(s_ckBottom, &lv_font_montserrat_16, 0);
   lv_obj_align(s_ckBottom, LV_ALIGN_BOTTOM_MID, 0, 0);
 
   s_cStatL[0] = s_cStatR[0] = '\0';
@@ -549,7 +549,7 @@ static lv_obj_t *list_add_item(lv_obj_t *list, const char *icon,
                                const char *txt, lv_event_cb_t cb,
                                uint8_t userId) {
   lv_obj_t *btn = lv_list_add_button(list, icon, txt);
-  lv_obj_set_style_pad_ver(btn, 3, 0);
+  lv_obj_set_style_pad_ver(btn, 6, 0);
   lv_obj_add_flag(btn, LV_OBJ_FLAG_SCROLL_ON_FOCUS);
   lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, (void *)(uintptr_t)userId);
   blacken(btn); // list items are added dynamically (tunes) -> blacken on create
@@ -656,53 +656,53 @@ static void make_alarm() {
   s_scr[SCR_ALARM] = scr;
 
   s_alTitle = lv_label_create(scr);
-  lv_obj_set_style_text_font(s_alTitle, &lv_font_montserrat_12, 0);
+  lv_obj_set_style_text_font(s_alTitle, &lv_font_montserrat_20, 0);
 
   lv_obj_t *row = make_row(scr, "Enabled");
   s_alEnable = lv_switch_create(row);
-  lv_obj_set_size(s_alEnable, 34, 17);
+  lv_obj_set_size(s_alEnable, 48, 24);
 
   row = make_row(scr, "Hour");
   s_alHour = lv_roller_create(row);
   lv_roller_set_options(s_alHour, s_hourOpts, LV_ROLLER_MODE_NORMAL);
   lv_roller_set_visible_row_count(s_alHour, 1);
-  lv_obj_set_width(s_alHour, 52);
+  lv_obj_set_width(s_alHour, 64);
 
   row = make_row(scr, "Minute");
   s_alMin = lv_roller_create(row);
   lv_roller_set_options(s_alMin, s_minOpts, LV_ROLLER_MODE_NORMAL);
   lv_roller_set_visible_row_count(s_alMin, 1);
-  lv_obj_set_width(s_alMin, 52);
+  lv_obj_set_width(s_alMin, 64);
 
   s_alDays = lv_buttonmatrix_create(scr);
   lv_buttonmatrix_set_map(s_alDays, DAYS_MAP);
   lv_buttonmatrix_set_button_ctrl_all(s_alDays, LV_BUTTONMATRIX_CTRL_CHECKABLE);
-  lv_obj_set_size(s_alDays, LV_PCT(100), 26);
+  lv_obj_set_size(s_alDays, LV_PCT(100), 40);
   lv_obj_set_style_pad_all(s_alDays, 1, 0);
   lv_obj_set_style_pad_gap(s_alDays, 2, 0);
-  lv_obj_set_style_text_font(s_alDays, &lv_font_montserrat_12, LV_PART_ITEMS);
+  lv_obj_set_style_text_font(s_alDays, &lv_font_montserrat_16, LV_PART_ITEMS);
 
   row = make_row(scr, "Tune");
   s_alTune = lv_dropdown_create(row);
-  lv_obj_set_width(s_alTune, 150);
+  lv_obj_set_width(s_alTune, 220);
   lv_obj_set_style_text_font(lv_dropdown_get_list(s_alTune),
-                             &lv_font_montserrat_12, 0);
+                             &lv_font_montserrat_16, 0);
   blacken(lv_dropdown_get_list(s_alTune)); // popup list is off-screen tree
 
   row = make_row(scr, "Ramp");
   s_alRamp = lv_dropdown_create(row);
   lv_dropdown_set_options_static(s_alRamp, RAMP_OPTS);
-  lv_obj_set_width(s_alRamp, 100);
+  lv_obj_set_width(s_alRamp, 140);
   lv_obj_set_style_text_font(lv_dropdown_get_list(s_alRamp),
-                             &lv_font_montserrat_12, 0);
+                             &lv_font_montserrat_16, 0);
   blacken(lv_dropdown_get_list(s_alRamp));
 
   row = make_row(scr, "Random");
   s_alJit = lv_dropdown_create(row);
   lv_dropdown_set_options_static(s_alJit, JITTER_OPTS);
-  lv_obj_set_width(s_alJit, 110);
+  lv_obj_set_width(s_alJit, 150);
   lv_obj_set_style_text_font(lv_dropdown_get_list(s_alJit),
-                             &lv_font_montserrat_12, 0);
+                             &lv_font_montserrat_16, 0);
   blacken(lv_dropdown_get_list(s_alJit));
 
   row = make_row(scr, NULL);
@@ -813,21 +813,21 @@ static void make_timezone() {
 
   lv_obj_t *row = make_row(scr, "Auto TZ (GNSS)");
   s_tzAuto = lv_switch_create(row);
-  lv_obj_set_size(s_tzAuto, 34, 17);
+  lv_obj_set_size(s_tzAuto, 48, 24);
   lv_obj_add_event_cb(s_tzAuto, tz_auto_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
   row = make_row(scr, "Zone");
   s_tzZone = lv_dropdown_create(row);
   lv_dropdown_set_options_static(s_tzZone, TZ_OPTS);
-  lv_obj_set_width(s_tzZone, 150);
+  lv_obj_set_width(s_tzZone, 200);
   lv_obj_set_style_text_font(lv_dropdown_get_list(s_tzZone),
-                             &lv_font_montserrat_12, 0);
+                             &lv_font_montserrat_16, 0);
   blacken(lv_dropdown_get_list(s_tzZone));
   lv_obj_add_event_cb(s_tzZone, tz_zone_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
   row = make_row(scr, "24h clock");
   s_tz24 = lv_switch_create(row);
-  lv_obj_set_size(s_tz24, 34, 17);
+  lv_obj_set_size(s_tz24, 48, 24);
   lv_obj_add_event_cb(s_tz24, tz_24h_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
   row = make_row(scr, NULL);
@@ -836,7 +836,7 @@ static void make_timezone() {
   lv_label_set_text_static(l, "Sync now");
   lv_obj_add_event_cb(s_tzSync, tz_sync_cb, LV_EVENT_CLICKED, NULL);
   s_tzInfo = lv_label_create(row);
-  lv_obj_set_style_text_font(s_tzInfo, &lv_font_montserrat_12, 0);
+  lv_obj_set_style_text_font(s_tzInfo, &lv_font_montserrat_16, 0);
   s_cTzInfo[0] = '\0';
 
   lv_obj_t *foc[4] = {s_tzAuto, s_tzZone, s_tz24, s_tzSync};
@@ -900,28 +900,28 @@ static void make_display() {
   lv_obj_t *row = make_row(scr, "Volume");
   s_dVolume = lv_slider_create(row);
   lv_slider_set_range(s_dVolume, 0, 10);
-  lv_obj_set_size(s_dVolume, 120, 8);
+  lv_obj_set_size(s_dVolume, 220, 12);
   lv_obj_add_event_cb(s_dVolume, disp_vol_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
   row = make_row(scr, "Brightness");
   s_dBright = lv_slider_create(row);
   lv_slider_set_range(s_dBright, 5, 255);
-  lv_obj_set_size(s_dBright, 120, 8);
+  lv_obj_set_size(s_dBright, 220, 12);
   lv_obj_add_event_cb(s_dBright, disp_bright_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
   row = make_row(scr, "Dim after");
   s_dDim = lv_dropdown_create(row);
   lv_dropdown_set_options_static(s_dDim, DIM_OPTS);
-  lv_obj_set_width(s_dDim, 100);
+  lv_obj_set_width(s_dDim, 140);
   lv_obj_set_style_text_font(lv_dropdown_get_list(s_dDim),
-                             &lv_font_montserrat_12, 0);
+                             &lv_font_montserrat_16, 0);
   blacken(lv_dropdown_get_list(s_dDim));
   lv_obj_add_event_cb(s_dDim, disp_dim_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
   row = make_row(scr, "Dim level");
   s_dDimLvl = lv_slider_create(row);
   lv_slider_set_range(s_dDimLvl, 0, 255);
-  lv_obj_set_size(s_dDimLvl, 120, 8);
+  lv_obj_set_size(s_dDimLvl, 220, 12);
   lv_obj_add_event_cb(s_dDimLvl, disp_dimlvl_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
   lv_obj_t *foc[4] = {s_dVolume, s_dBright, s_dDim, s_dDimLvl};
@@ -1049,7 +1049,7 @@ static void make_sysinfo() {
   lv_obj_set_style_pad_all(scr, 2, 0);
   s_sysLabel = lv_label_create(scr);
   lv_obj_set_width(s_sysLabel, LV_PCT(100));
-  lv_obj_set_style_text_font(s_sysLabel, &lv_font_montserrat_12, 0);
+  lv_obj_set_style_text_font(s_sysLabel, &lv_font_montserrat_14, 0);
   lv_label_set_long_mode(s_sysLabel, LV_LABEL_LONG_MODE_WRAP);
   s_cSys[0] = '\0';
 }
@@ -1070,7 +1070,7 @@ static void make_ringing() {
   lv_obj_align(s_rgTime, LV_ALIGN_CENTER, 0, 2);
 
   s_rgHint = lv_label_create(scr);
-  lv_obj_set_style_text_font(s_rgHint, &lv_font_montserrat_12, 0);
+  lv_obj_set_style_text_font(s_rgHint, &lv_font_montserrat_16, 0);
   lv_obj_align(s_rgHint, LV_ALIGN_BOTTOM_MID, 0, 0);
   lv_label_set_text_static(s_rgHint, "press = snooze    hold = stop");
 }

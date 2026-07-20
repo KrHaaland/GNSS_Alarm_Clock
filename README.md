@@ -6,7 +6,7 @@ compatible), designed in `HARDWARE/samd51_gps_alarm_clock` (KiCad).
 Time is set automatically from GNSS, the timezone (with DST) is derived offline
 from the GNSS coordinates and saved to flash so it stays correct indoors, and
 alarms drive an LED light-show + a tune through a class-D amp. The UI is LVGL on
-a color TFT driven by four buttons.
+a 428×142 color TFT driven by four buttons.
 
 > **Current state:** firmware is feature-complete and running on hardware —
 > display, GNSS time/timezone, alarms, audio, tunes-over-USB, settings, modes
@@ -72,30 +72,27 @@ a color TFT driven by four buttons.
 - **Tune upload**: the QSPI flash appears as a **USB flash drive** (`TUNES`) —
   drag & drop `.wav` files (PCM, 8/16-bit, mono/stereo, 8–48 kHz).
 
-## Display (ST7789)
+## Display (NV3007)
 
-The original SH1122 grayscale OLED was replaced (July 2026) with an **ST7789
-color TFT**. Driver: [`src/DisplayST7789.cpp`](src/DisplayST7789.cpp).
+The panel is an **NV3007 color TFT** (Newvision), native 142×428 bar type,
+driven **landscape 428×142**. Driver: [`src/DisplayNV3007.cpp`](src/DisplayNV3007.cpp).
+(The v1 prototype's ST7789 284×76 driver is kept in-tree — pick the panel via
+**DISPLAY SELECT** in `platformio.ini`.)
 
-- Native panel is 76×284 portrait; driven **landscape 284×76** via `MADCTL 0x60`.
-- The glass is a **centered sub-window** of the controller's 320×240 GRAM, so the
-  driver applies window offsets **`ST_X_OFFSET=18`, `ST_Y_OFFSET=82`**
-  (= (320−284)/2 and (240−76)/2). If the panel/wiring changes, re-verify with the
-  built-in border self-test.
-- **Inversion OFF** (`ST_INVERSION=0`) — this panel shows inverted colors with
-  INVON (black→white, green→magenta).
-- **SPI 24 MHz**, MSBFIRST, `SPI_MODE3`, on SERCOM2. Step down to 16/12 MHz if
-  garbage/flicker ever appears over jumper wiring.
-- Flush is **synchronous per-byte** (LVGL RGB565 → byte-swapped → streamed). DMA
-  is deliberately avoided: the 4-arg DMA `SPI.transfer` fires an unhandled
-  `DMAC_1` IRQ that freezes the MCU. Full-frame flush ≈ 15 ms.
-- **Backlight (BLK)** on **D11 / PA19**, **PWM-dimmed** via `analogWrite`
-  (TCC1_CH3) — the brightness slider and "dim after" timeout control the level.
-  *Note:* J3 has no backlight line (HW review #14) — BLK is wired separately.
-- **Shake / tap to wake:** motion on the LIS3DH accelerometer restores full
-  brightness and resets the dim timer, just like a button press.
-- **Bring-up aid:** compile-time `DISPLAY_SELFTEST` (default 0) draws RGB fills +
-  an edge border instead of the UI, to re-verify SPI / offsets / orientation.
+- **Vendor init is mandatory**: `0xFF 0xA5` unlocks the extended register page
+  (power/gamma/gate-driver/source-timing dump); without it the address engine
+  wraps writes linearly across the glass. `0xFF 0x00` returns to the DCS page.
+  Sequence cross-verified against five independent drivers (Arduino_GFX, LVGL
+  lv_nv3007, vendor reference, STM32 + esp_lcd ports).
+- GRAM is **168×428**; the 142 visible columns are inset 12/14. Landscape
+  (`MADCTL 0x60`) puts the inset on RASET: **`NV_Y_OFFSET 14`** (flipped 0xA0
+  → 12). Inversion OFF.
+- **SPI mode 0** (an NV3007 quirk — ST7789 setups often run mode 3), 24 MHz,
+  synchronous per-byte flush (no DMA — ADR-0002 applies here too).
+- Known silicon quirk: tiny partial writes can half-light adjacent pixels for
+  RGB channel values 1–31 against black; LVGL's strip-sized flushes avoid it.
+- Backlight D11/PA19, PWM-dimmed; shake-to-wake; `DISPLAY_SELFTEST` bring-up
+  pattern test (colors/border/origin) as before.
 
 ## Storage decision
 
@@ -157,8 +154,8 @@ are stored as 16-bit FNV-1a hashes re-matched against the TUNES directory
 
 | Function | MCU pin | Arduino pin |
 |---|---|---|
-| ST7789 CS / DC / RST / BL | PA18 / PA17 / PA16 / PA19 | D10 / D12 / D13 / D11 |
-| ST7789 SPI (SERCOM2) | PA12 MOSI, PA13 SCK | MOSI/SCK |
+| Display CS / DC / RST / BL | PA18 / PA17 / PA16 / PA19 | D10 / D12 / D13 / D11 |
+| Display SPI (SERCOM2) | PA12 MOSI, PA13 SCK | MOSI/SCK |
 | GNSS L86 UART (SERCOM3) | PA22 TX → L86, PA23 RX ← L86 | Serial1 |
 | GNSS FORCE_ON / RESET_N | PB00 / PB31 | direct port |
 | I²C @100 kHz: RTC 0x52, amp 0x58, accel 0x18, EEPROM 0x50 | PB02 SDA, PB03 SCL | SDA/SCL |
