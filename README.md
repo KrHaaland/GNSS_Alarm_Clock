@@ -93,6 +93,9 @@ driven **landscape 428×142**. Driver: [`src/DisplayNV3007.cpp`](src/DisplayNV30
   RGB channel values 1–31 against black; LVGL's strip-sized flushes avoid it.
 - Backlight D11/PA19, PWM-dimmed; shake-to-wake; `DISPLAY_SELFTEST` bring-up
   pattern test (colors/border/origin) as before.
+- The clock figure uses a **generated 100 px Montserrat subset**
+  (`src/font_clock_100.c`, 18 chars) — replacing the full 48 px font actually
+  **shrank** flash by 67 KB (ADR-0011).
 
 ## Storage decision
 

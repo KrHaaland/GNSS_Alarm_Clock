@@ -15,3 +15,4 @@ the decision, and its consequences. Newest last. Format: lightweight MADR.
 | [0008](0008-hw-v2-j20-liion.md) | Hardware v2: SAMD51J20A + Li-ion | Accepted (planned) |
 | [0009](0009-alarm-interaction-choices.md) | Alarm interaction choices | Accepted |
 | [0010](0010-amp-loudness-architecture.md) | Amp loudness: AGC leveling, limiter as volume | Accepted |
+| [0011](0011-display-panel-select-and-subset-font.md) | Panel select + subset clock font | Accepted |
