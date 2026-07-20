@@ -58,7 +58,7 @@ a 428×142 color TFT driven by four buttons.
     joins in; auto-silence after 30 min.
   - **Snooze**: short-press any button, or double-tap the clock (LIS3DH).
     **Stop**: long-press any button.
-- **UI**: **LVGL 9.5** on an **ST7789 color TFT** (see below), driven by the 4
+- **UI**: **LVGL 9.5** on an **NV3007 color TFT** (see below), driven by the 4
   buttons above the display: `[Back/Menu] [Prev/–] [Next/+] [OK]`. Screens:
   clock, menu, alarm-edit, time & zone, display, tunes, system-info, ringing.
   A true-black theme keeps the panel dark.
