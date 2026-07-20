@@ -115,6 +115,12 @@ codebases (researched via web). Old ST7789 driver kept, selectable via
 DISPLAY SELECT in platformio.ini. UI scaled up for the doubled resolution
 (fonts 12→16/14/20, wider sliders/dropdowns, taller day-matrix).
 
+**100 px clock font:** generated a Montserrat-Medium subset (" -.0123456789:AEGM",
+4bpp, Pillow from lvgl's bundled TTF, LVGL 9.5 fmt_txt layout) for the big
+clock/ring figure on the 142 px panel. Montserrat-48 became unreferenced and
+is linker-GC'd: flash 95.7% -> 82.9% (net -67 KB) while the clock doubled in
+size. Generator approach documented in src/font_clock_100.c header.
+
 **Docs:** README refreshed to current reality; this STATUS report added.
 
 ---

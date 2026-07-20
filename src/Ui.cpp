@@ -30,6 +30,9 @@
 #define UI_SAVE_DEBOUNCE_MS 1500
 #define UI_TEST_PREVIEW_MS 5000
 
+// 100 px Montserrat subset for the big clock figure (src/font_clock_100.c)
+LV_FONT_DECLARE(font_clock_100)
+
 // ---------------------------------------------------------------- state ---
 enum UiScreen : uint8_t {
   SCR_CLOCK, SCR_MENU, SCR_ALARM, SCR_TZ, SCR_DISP, SCR_TUNES, SCR_SYS,
@@ -480,7 +483,7 @@ static void make_clock() {
   lv_obj_align(s_ckStatR, LV_ALIGN_TOP_RIGHT, -2, 0);
 
   s_ckBig = lv_label_create(scr);
-  lv_obj_set_style_text_font(s_ckBig, &lv_font_montserrat_48, 0);
+  lv_obj_set_style_text_font(s_ckBig, &font_clock_100, 0);
   lv_obj_align(s_ckBig, LV_ALIGN_CENTER, 0, 0); // HH:MM centered
 
   s_ckSec = lv_label_create(scr);
@@ -1066,7 +1069,7 @@ static void make_ringing() {
   lv_label_set_text_static(s_rgTitle, "ALARM");
 
   s_rgTime = lv_label_create(scr);
-  lv_obj_set_style_text_font(s_rgTime, &lv_font_montserrat_48, 0);
+  lv_obj_set_style_text_font(s_rgTime, &font_clock_100, 0);
   lv_obj_align(s_rgTime, LV_ALIGN_CENTER, 0, 2);
 
   s_rgHint = lv_label_create(scr);
