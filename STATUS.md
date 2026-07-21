@@ -151,9 +151,10 @@ stream concurrently on two DMAC channels.
 
 ### ✅ RV-3028 RTC (U5) — RESOLVED (was: not populated)
 Bus scan showed `0x52` silent because **U5 was never soldered onto this
-prototype**. Hand-fitted on the bench; now ACKs at 0x52, and the settings
-EEPROM survives both reboot and reflash (verified). Remaining user test:
-holdover (power-loss → correct time back via the supercaps).
+prototype**. Hand-fitted on the bench; now ACKs at 0x52, the settings
+EEPROM survives both reboot and reflash, and **holdover is verified**
+(2026-07-21): power-loss → correct time back via the supercaps. The full
+RTC chain — timekeeping, backup power, settings storage — works.
 
 ### L86 GNSS signals unrouted (new findings)
 - **1PPS (L86 pin 6) is a dead-end net** — no hardware pulse-per-second to the
