@@ -87,8 +87,11 @@ driven **landscape 428×142**. Driver: [`src/DisplayNV3007.cpp`](src/DisplayNV30
 - GRAM is **168×428**; the 142 visible columns are inset 12/14. Landscape
   (`MADCTL 0x60`) puts the inset on RASET: **`NV_Y_OFFSET 14`** (flipped 0xA0
   → 12). Inversion OFF.
-- **SPI mode 0** (an NV3007 quirk — ST7789 setups often run mode 3), 24 MHz,
-  synchronous per-byte flush (no DMA — ADR-0002 applies here too).
+- **SPI mode 0** (an NV3007 quirk — ST7789 setups often run mode 3), **30 MHz**
+  (SERCOM2 re-clocked from the 120 MHz GCLK0 — the default 48 MHz source
+  quantizes to 24 MHz max). Pixels stream via a DRE-paced write loop straight
+  into the SERCOM data register (back-to-back SCK, no per-byte RX round-trip);
+  still synchronous, no DMA — ADR-0002 applies here too. Full frame ~26 ms.
 - Known silicon quirk: tiny partial writes can half-light adjacent pixels for
   RGB channel values 1–31 against black; LVGL's strip-sized flushes avoid it.
 - Backlight D11/PA19, PWM-dimmed; shake-to-wake; `DISPLAY_SELFTEST` bring-up

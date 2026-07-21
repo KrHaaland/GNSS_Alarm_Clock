@@ -30,8 +30,9 @@ static const uint32_t kSpiHz = 30000000;
 #define NV_X_OFFSET 0
 #define NV_Y_OFFSET 14
 
-// Partial-render buffer: 24 rows, RGB565 (2 bytes/px). Aligned for LVGL 9.
-static uint8_t s_buf[DISP_W * 24 * 2] __attribute__((aligned(4)));
+// Partial-render buffer: 32 rows, RGB565 (2 bytes/px). Aligned for LVGL 9.
+// (~27 KB; fewer, larger flush windows per redraw.)
+static uint8_t s_buf[DISP_W * 32 * 2] __attribute__((aligned(4)));
 static lv_display_t *s_disp;
 
 static inline void cs_low() { digitalWrite(PIN_OLED_CS, LOW); }

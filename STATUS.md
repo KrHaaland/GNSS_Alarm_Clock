@@ -1,6 +1,6 @@
 # Project Status Report — GNSS Alarm Clock
 
-_Last updated: 2026-07-14_
+_Last updated: 2026-07-21_
 
 Custom **SAMD51J19A** board (Adafruit Metro M4 compatible). Firmware:
 PlatformIO + Arduino + **LVGL 9.5**. This report captures the current state,
@@ -16,10 +16,10 @@ on the RTC (below); it does not stop the clock from working off GNSS.
 
 | Subsystem | State | Notes |
 |---|---|---|
-| Display (NV3007) | ✅ Working | 428×142 landscape, vendor-page init, Y+14 offset, 24 MHz mode 0 |
+| Display (NV3007) | ✅ Working | 428×142 landscape, vendor-page init, Y+14 offset, 30 MHz mode 0 |
 | GNSS time (L86) | ✅ Working | RMC+GGA @1 Hz, cold-start year-2080 guard |
 | Timezone + DST | ✅ Working | Offline coord→POSIX-TZ, persisted to flash |
-| RTC (RV-3028) | 🔴 HW fault | Not ACKing on I²C — reflow U5 (see §3) |
+| RTC (RV-3028) | ✅ Working | U5 hand-soldered onto the prototype; ACKs at 0x52, settings EEPROM verified |
 | Alarms + snooze | ✅ Implemented | Verify ring/re-ring/tap on hardware (§4) |
 | Audio (DAC→TPA2016) | ✅ Working | WAV + 3 melodies, digital + amp volume |
 | LEDs (3 sections) | ✅ Working | Chase/blink from supercap rail |
@@ -109,8 +109,8 @@ showing the nominal time. Packed into spare alarm-flag bits (no EEPROM cost).
 
 **Display swapped to NV3007 (428×142):** new driver (vendor-page init is
 mandatory — without the 0xFF 0xA5 register dump the address engine wraps
-writes linearly), GRAM 168×428 with Y+14 landscape offset, SPI mode 0 @
-24 MHz, inversion off. Init cross-verified against five independent driver
+writes linearly), GRAM 168×428 with Y+14 landscape offset, SPI mode 0,
+inversion off. Init cross-verified against five independent driver
 codebases (researched via web). Old ST7789 driver kept, selectable via
 DISPLAY SELECT in platformio.ini. UI scaled up for the doubled resolution
 (fonts 12→16/14/20, wider sliders/dropdowns, taller day-matrix).
@@ -121,24 +121,25 @@ clock/ring figure on the 142 px panel. Montserrat-48 became unreferenced and
 is linker-GC'd: flash 95.7% -> 82.9% (net -67 KB) while the clock doubled in
 size. Generator approach documented in src/font_clock_100.c header.
 
+**Display speed (NV3007):** SPI 24 → **30 MHz** (SERCOM2 re-clocked from the
+120 MHz GCLK0 — the default 48 MHz source can't divide above 24) and the pixel
+stream now goes through a **DRE-paced bulk loop** writing straight into the
+double-buffered SERCOM data register (back-to-back SCK instead of a per-byte
+`SPI.transfer()` RX round-trip). Full-frame flush ~90 → ~26 ms; user-verified
+"veldig mye bedre". Follow-ups: LVGL refresh period 30 → 15 ms and render
+buffer 24 → 32 rows (RAM 49 %). Still synchronous/no DMA (ADR-0002).
+
 **Docs:** README refreshed to current reality; this STATUS report added.
 
 ---
 
 ## 3. Open HARDWARE items
 
-### 🔴 RV-3028 RTC (U5) not on the I²C bus — **root cause found: not populated!**
-Bus scan (100 kHz) showed 0x18/0x50/0x58 answering and `0x52` silent — and the
-bench inspection revealed why: **U5 was never soldered onto this prototype.**
-Being hand-fitted now.
-
-**After soldering:** power-cycle (the RTC is probed once at boot), then check
-Menu → System info → should read **"RTC ok"** instead of "RTC MISSING". For a
-live probe instead: set `I2C_SCAN 1` in main.cpp, reflash, watch USB serial
-for `ACK 0x52`.
-
-**Impact while absent:** clock works when GNSS has a fix; loses time on
-power-off and can't set time indoors (that's the RTC's job).
+### ✅ RV-3028 RTC (U5) — RESOLVED (was: not populated)
+Bus scan showed `0x52` silent because **U5 was never soldered onto this
+prototype**. Hand-fitted on the bench; now ACKs at 0x52, and the settings
+EEPROM survives both reboot and reflash (verified). Remaining user test:
+holdover (power-loss → correct time back via the supercaps).
 
 ### L86 GNSS signals unrouted (new findings)
 - **1PPS (L86 pin 6) is a dead-end net** — no hardware pulse-per-second to the
@@ -189,8 +190,10 @@ Firmware consequences to prepare when the v2 schematic lands:
 **Polish / nice-to-have:**
 - **Red gamma** — bright red renders slightly brown; ST7789 gamma table could be
   tuned (cosmetic; UI is white-on-black).
-- **Faster flush** — a direct SERCOM data-register loop (or a proper DMAC IRQ
-  handler) would take full-frame ~15 ms → ~8 ms.
+- **Async flush (DMA)** — the SERCOM data-register loop is done (30 MHz,
+  ~26 ms/frame, wire-speed). The remaining lever is a DMA flush with a *properly
+  installed* DMAC IRQ handler (ADR-0002's freeze was the unhandled IRQ, not DMA
+  itself) + LVGL double-buffering, so rendering overlaps the transfer.
 - **GSV sky-view** — enable GSV + parse per-satellite SNR for an indoor
   reception/antenna-placement screen (high value given indoor use).
 - **Escalation timer** restarts on each snooze re-ring (`s_ringStartMs` reset) —
