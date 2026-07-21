@@ -127,7 +127,14 @@ stream now goes through a **DRE-paced bulk loop** writing straight into the
 double-buffered SERCOM data register (back-to-back SCK instead of a per-byte
 `SPI.transfer()` RX round-trip). Full-frame flush ~90 → ~26 ms; user-verified
 "veldig mye bedre". Follow-ups: LVGL refresh period 30 → 15 ms and render
-buffer 24 → 32 rows (RAM 49 %). Still synchronous/no DMA (ADR-0002).
+buffer 24 → 32 rows.
+
+**Async DMA flush (ADR-0012, supersedes 0002):** dedicated DMAC channel
+(Adafruit_ZeroDMA — installs the IRQ handlers whose absence caused the 0002
+freeze) + **two** 32-row LVGL buffers (RAM 63 %), so rendering overlaps the
+transfer and the main loop no longer stalls during flushes. Synchronous
+DRE-loop kept as automatic fallback. User-verified on hardware: "displayet
+er smooth!"
 
 **Docs:** README refreshed to current reality; this STATUS report added.
 
@@ -190,10 +197,10 @@ Firmware consequences to prepare when the v2 schematic lands:
 **Polish / nice-to-have:**
 - **Red gamma** — bright red renders slightly brown; ST7789 gamma table could be
   tuned (cosmetic; UI is white-on-black).
-- **Async flush (DMA)** — the SERCOM data-register loop is done (30 MHz,
-  ~26 ms/frame, wire-speed). The remaining lever is a DMA flush with a *properly
-  installed* DMAC IRQ handler (ADR-0002's freeze was the unhandled IRQ, not DMA
-  itself) + LVGL double-buffering, so rendering overlaps the transfer.
+- ~~Async flush (DMA)~~ — **done** (ADR-0012): DMA + double buffering,
+  verified on hardware. The display path is now wire-bound; the only lever
+  left is a higher SCK (50 MHz — above the NV3007's ~40 MHz ceiling, revisit
+  only on the v2 PCB with proper routing).
 - **GSV sky-view** — enable GSV + parse per-satellite SNR for an indoor
   reception/antenna-placement screen (high value given indoor use).
 - **Escalation timer** restarts on each snooze re-ring (`s_ringStartMs` reset) —

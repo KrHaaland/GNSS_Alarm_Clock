@@ -89,9 +89,12 @@ driven **landscape 428×142**. Driver: [`src/DisplayNV3007.cpp`](src/DisplayNV30
   → 12). Inversion OFF.
 - **SPI mode 0** (an NV3007 quirk — ST7789 setups often run mode 3), **30 MHz**
   (SERCOM2 re-clocked from the 120 MHz GCLK0 — the default 48 MHz source
-  quantizes to 24 MHz max). Pixels stream via a DRE-paced write loop straight
-  into the SERCOM data register (back-to-back SCK, no per-byte RX round-trip);
-  still synchronous, no DMA — ADR-0002 applies here too. Full frame ~26 ms.
+  quantizes to 24 MHz max). Pixels stream via an **async DMA flush with double
+  buffering** (ADR-0012, superseding ADR-0002's DMA ban): LVGL renders the
+  next strip while the DMAC streams the previous one, and the completion IRQ
+  hands the buffer back. Falls back to a synchronous DRE-paced register loop
+  if the DMA channel is unavailable. Full frame ~26 ms on the wire, hidden
+  behind rendering.
 - Known silicon quirk: tiny partial writes can half-light adjacent pixels for
   RGB channel values 1–31 against black; LVGL's strip-sized flushes avoid it.
 - Backlight D11/PA19, PWM-dimmed; shake-to-wake; `DISPLAY_SELFTEST` bring-up

@@ -1,6 +1,6 @@
 # 0002 — Synchronous per-byte display flush (no DMA)
 
-Date: 2026-07-05 · Status: **Accepted**
+Date: 2026-07-05 · Status: **Superseded by [0012](0012-async-dma-display-flush.md)**
 
 ## Context
 The ST7789 flush originally used the SAMD51 SPI DMA path (4-arg

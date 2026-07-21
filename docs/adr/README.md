@@ -6,7 +6,7 @@ the decision, and its consequences. Newest last. Format: lightweight MADR.
 | # | Title | Status |
 |---|---|---|
 | [0001](0001-tunes-on-qspi-flash.md) | Tune storage on QSPI flash + USB MSC | Accepted |
-| [0002](0002-synchronous-display-flush.md) | Synchronous per-byte display flush (no DMA) | Accepted |
+| [0002](0002-synchronous-display-flush.md) | Synchronous per-byte display flush (no DMA) | Superseded by 0012 |
 | [0003](0003-offline-timezone-resolution.md) | Offline timezone: polygons → boxes → longitude | Accepted |
 | [0004](0004-settings-in-rtc-user-eeprom.md) | Settings in the RV-3028 user EEPROM | Accepted |
 | [0005](0005-usb-identity-pidcodes.md) | USB identity via pid.codes | Accepted |
@@ -16,3 +16,4 @@ the decision, and its consequences. Newest last. Format: lightweight MADR.
 | [0009](0009-alarm-interaction-choices.md) | Alarm interaction choices | Accepted |
 | [0010](0010-amp-loudness-architecture.md) | Amp loudness: AGC leveling, limiter as volume | Accepted |
 | [0011](0011-display-panel-select-and-subset-font.md) | Panel select + subset clock font | Accepted |
+| [0012](0012-async-dma-display-flush.md) | Async DMA display flush + double buffering | Accepted |

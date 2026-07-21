@@ -4,6 +4,7 @@
 
 #include "DisplayNV3007.h"
 #include "pins.h"
+#include <Adafruit_ZeroDMA.h>
 #include <SPI.h>
 
 // 30 MHz: SERCOM2 is re-clocked from the 120 MHz source (setClockSource in
@@ -30,10 +31,21 @@ static const uint32_t kSpiHz = 30000000;
 #define NV_X_OFFSET 0
 #define NV_Y_OFFSET 14
 
-// Partial-render buffer: 32 rows, RGB565 (2 bytes/px). Aligned for LVGL 9.
-// (~27 KB; fewer, larger flush windows per redraw.)
+// Two partial-render buffers, 32 rows each, RGB565 (~27 KB apiece): LVGL
+// renders the next strip into one while DMA streams the other to the panel.
+// A strip is 27392 bytes — safely under the DMAC's 65535-beat descriptor cap.
 static uint8_t s_buf[DISP_W * 32 * 2] __attribute__((aligned(4)));
+static uint8_t s_buf2[DISP_W * 32 * 2] __attribute__((aligned(4)));
 static lv_display_t *s_disp;
+
+// Async flush: one DMAC channel, beat-triggered on SERCOM2 TX-ready. The old
+// freeze (ADR-0002) was an *unhandled* DMAC_1 IRQ from the SPI library's own
+// DMA path — Adafruit_ZeroDMA installs handlers for all five DMAC IRQ lines,
+// which is exactly the missing piece.
+static Adafruit_ZeroDMA s_dma;
+static DmacDescriptor *s_dmaDesc;
+static bool s_dmaReady;                // channel allocated OK at init
+static volatile bool s_dmaBusy;        // transfer in flight (cleared in IRQ)
 
 static inline void cs_low() { digitalWrite(PIN_OLED_CS, LOW); }
 static inline void cs_high() { digitalWrite(PIN_OLED_CS, HIGH); }
@@ -55,6 +67,16 @@ static void wr_data(const uint8_t *d, size_t n) {
 // back-to-back (DATA is double-buffered). The unread RX side overflows by
 // design — drained and cleared afterwards so SPI.transfer() keeps working
 // for command bytes.
+static inline void spi_drain_rx() {
+  volatile SercomSpi &spi = SERCOM2->SPI;
+  while (!spi.INTFLAG.bit.TXC) {
+  }
+  (void)spi.DATA.reg; // drain RX
+  (void)spi.DATA.reg;
+  spi.STATUS.bit.BUFOVF = 0;
+  spi.INTFLAG.reg = SERCOM_SPI_INTFLAG_ERROR;
+}
+
 static void spi_write_bulk(const uint8_t *d, uint32_t n) {
   volatile SercomSpi &spi = SERCOM2->SPI;
   for (uint32_t i = 0; i < n; i++) {
@@ -62,12 +84,24 @@ static void spi_write_bulk(const uint8_t *d, uint32_t n) {
     }
     spi.DATA.reg = d[i];
   }
-  while (!spi.INTFLAG.bit.TXC) {
+  spi_drain_rx();
+}
+
+// Any code touching the SPI bus (or the buffers) outside flush_cb must wait
+// out an in-flight DMA transfer first. Full strip = ~7 ms at 30 MHz.
+static inline void dma_wait_idle() {
+  while (s_dmaBusy) {
   }
-  (void)spi.DATA.reg; // drain RX
-  (void)spi.DATA.reg;
-  spi.STATUS.bit.BUFOVF = 0;
-  spi.INTFLAG.reg = SERCOM_SPI_INTFLAG_ERROR;
+}
+
+// DMAC IRQ: last byte handed to the SERCOM. Wait out the shifter (<1 us),
+// clean up the RX side so polled SPI.transfer() keeps working, release CS
+// and hand the buffer back to LVGL.
+static void dma_done_cb(Adafruit_ZeroDMA *) {
+  spi_drain_rx();
+  cs_high();
+  s_dmaBusy = false;
+  lv_display_flush_ready(s_disp);
 }
 
 static void set_window(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1) {
@@ -92,16 +126,24 @@ static void flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px) {
   // LVGL RGB565 is little-endian; the panel wants MSB first -> swap in place.
   lv_draw_sw_rgb565_swap(px, px_count);
 
-  SPI.beginTransaction(SPISettings(kSpiHz, MSBFIRST, SPI_MODE0));
+  dma_wait_idle(); // LVGL already gates on flush_ready; belt and suspenders
   cs_low();
   set_window((uint16_t)area->x1, (uint16_t)area->y1, (uint16_t)area->x2,
              (uint16_t)area->y2);
-  // Synchronous but DRE-paced (NO DMA — the DMA path fires the unhandled
-  // DMAC_1 IRQ and freezes the MCU; see docs/adr/0002). Full frame ~33 ms
-  // at 30 MHz; typical partial flushes are a few ms.
+
+  if (s_dmaReady) {
+    // Async: hand the strip to the DMAC and return — LVGL renders the next
+    // strip into the other buffer meanwhile. dma_done_cb() releases CS and
+    // calls lv_display_flush_ready() from the IRQ.
+    s_dmaBusy = true;
+    s_dma.changeDescriptor(s_dmaDesc, px, (void *)&SERCOM2->SPI.DATA.reg,
+                           px_count * 2);
+    if (s_dma.startJob() == DMA_STATUS_OK)
+      return;
+    s_dmaBusy = false; // channel refused the job — fall through, synchronous
+  }
   spi_write_bulk(px, px_count * 2);
   cs_high();
-  SPI.endTransaction();
   lv_display_flush_ready(disp);
 }
 
@@ -271,10 +313,24 @@ void display_init() {
   display_selftest(); // never returns — bring-up pattern test
 #endif
 
+  // DMA channel for the async pixel flush. On any allocation failure the
+  // driver silently stays on the synchronous DRE-paced path.
+  s_dma.setTrigger(SERCOM2_DMAC_ID_TX);
+  s_dma.setAction(DMA_TRIGGER_ACTON_BEAT);
+  if (s_dma.allocate() == DMA_STATUS_OK) {
+    s_dmaDesc = s_dma.addDescriptor(
+        s_buf, (void *)&SERCOM2->SPI.DATA.reg, 1, DMA_BEAT_SIZE_BYTE,
+        true /*src increments*/, false /*fixed dst*/);
+    if (s_dmaDesc) {
+      s_dma.setCallback(dma_done_cb);
+      s_dmaReady = true;
+    }
+  }
+
   s_disp = lv_display_create(DISP_W, DISP_H);
   lv_display_set_color_format(s_disp, LV_COLOR_FORMAT_RGB565);
   lv_display_set_flush_cb(s_disp, flush_cb);
-  lv_display_set_buffers(s_disp, s_buf, NULL, sizeof(s_buf),
+  lv_display_set_buffers(s_disp, s_buf, s_buf2, sizeof(s_buf),
                          LV_DISPLAY_RENDER_MODE_PARTIAL);
 }
 
@@ -284,6 +340,7 @@ void display_set_contrast(uint8_t c) {
 }
 
 void display_power(bool on) {
+  dma_wait_idle(); // don't jam a command into an in-flight pixel stream
   SPI.beginTransaction(SPISettings(kSpiHz, MSBFIRST, SPI_MODE0));
   cs_low();
   wr_cmd(on ? 0x29 : 0x28); // DISPON / DISPOFF
