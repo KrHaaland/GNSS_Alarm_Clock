@@ -24,6 +24,19 @@ uint8_t gnss_num_sats();
 uint16_t gnss_hdop_x10(); // HDOP * 10, 0xFFFF when unknown
 uint32_t gnss_chars_seen(); // diagnostics: raw NMEA chars processed
 
+// Satellites in view (GSV, requested every 5th fix). TinyGPS++ has no GSV
+// support, so Gnss.cpp runs its own line parser alongside it.
+struct GnssSatInfo {
+  uint8_t prn;      // GPS 1-32, SBAS 33-64, GLONASS 65-96 (L86 numbering)
+  uint8_t elevDeg;  // 0-90 above horizon
+  uint16_t azimDeg; // 0-359, 0 = north
+  uint8_t snrDb;    // C/N0 dB-Hz, 0 = in view but not tracked
+  char system;      // 'G' = GPS, 'R' = GLONASS
+};
+// Copies up to maxN satellites into out, GPS first. Returns the count;
+// 0 when no GSV data has arrived for >12 s (antenna dead / sim build).
+uint8_t gnss_get_sats(GnssSatInfo *out, uint8_t maxN);
+
 void gnss_hw_reset(); // pulse L86 RESET_N (blocks ~110 ms)
 
 #ifdef GNSS_SIM

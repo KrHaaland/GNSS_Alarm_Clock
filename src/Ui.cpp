@@ -8,6 +8,7 @@
 #include "Ui.h"
 
 #include <lvgl.h>
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -36,8 +37,9 @@ LV_FONT_DECLARE(font_clock_100)
 // ---------------------------------------------------------------- state ---
 enum UiScreen : uint8_t {
   SCR_CLOCK, SCR_MENU, SCR_ALARM, SCR_TZ, SCR_DISP, SCR_TUNES, SCR_SYS,
-  SCR_RING
+  SCR_SKY, SCR_RING
 };
+#define SCR_COUNT 9
 
 static UiScreen s_screen = SCR_CLOCK;
 static lv_group_t *s_group;
@@ -58,7 +60,7 @@ static uint32_t s_previewDeadline; // 0 = no timeout (Tunes screen)
 static lv_obj_t *s_msgbox;
 
 // ------------------------------------------------------------- widgets ---
-static lv_obj_t *s_scr[8]; // indexed by UiScreen
+static lv_obj_t *s_scr[SCR_COUNT]; // indexed by UiScreen
 
 // Clock
 static lv_obj_t *s_ckStatL, *s_ckStatR;
@@ -66,8 +68,42 @@ static lv_obj_t *s_ckBig, *s_ckSec, *s_ckAmpm, *s_ckBottom;
 static char s_cStatL[24], s_cStatR[24];
 static char s_cBig[12], s_cSec[8], s_cAmpm[8], s_cBottom[72];
 
+// Starry night: white dots behind the clock, shown 22:00-06:00 when enabled.
+// Created before the labels so they stay in the background; label glyphs
+// draw over them (their backgrounds are transparent).
+#define STAR_COUNT 26
+static lv_obj_t *s_stars[STAR_COUNT];
+static bool s_starsShown;
+static uint32_t s_twinkleRnd = 0x1234567u;
+static const uint8_t STAR_POS[STAR_COUNT][2] = {
+    // x/2 (0..213), y — spread by hand so no rows/diagonals form
+    {6, 18},    {22, 120}, {35, 35},  {49, 88},  {65, 14},  {75, 110},
+    {87, 52},   {100, 128},{107, 8},  {120, 70}, {131, 30}, {142, 115},
+    {150, 55},  {161, 10}, {170, 90}, {180, 40}, {192, 125},{200, 20},
+    {207, 75},  {15, 70},  {30, 132}, {55, 60},  {95, 95},  {125, 105},
+    {155, 130}, {210, 110}};
+
+static void stars_set(bool on) {
+  if (on == s_starsShown)
+    return;
+  s_starsShown = on;
+  for (uint8_t i = 0; i < STAR_COUNT; i++) {
+    if (on)
+      lv_obj_remove_flag(s_stars[i], LV_OBJ_FLAG_HIDDEN);
+    else
+      lv_obj_add_flag(s_stars[i], LV_OBJ_FLAG_HIDDEN);
+  }
+}
+
+static void stars_twinkle() { // one star flips brightness per UI tick
+  s_twinkleRnd = s_twinkleRnd * 1664525u + 1013904223u;
+  lv_obj_t *st = s_stars[(s_twinkleRnd >> 16) % STAR_COUNT];
+  lv_obj_set_style_bg_opa(st, ((s_twinkleRnd >> 8) & 1) ? LV_OPA_COVER
+                                                        : LV_OPA_40, 0);
+}
+
 // Menu
-static lv_obj_t *s_fMenu[9];
+static lv_obj_t *s_fMenu[10];
 static lv_obj_t *s_tapLabel;  // "Tap snooze: On/Off" toggle item label
 static lv_obj_t *s_modeLabel; // "Mode: ..." cycle item label
 
@@ -84,8 +120,8 @@ static char s_cTzInfo[64];
 static uint32_t s_tzNoteUntil;
 
 // Display
-static lv_obj_t *s_dVolume, *s_dBright, *s_dDim, *s_dDimLvl;
-static lv_obj_t *s_fDisp[4];
+static lv_obj_t *s_dVolume, *s_dBright, *s_dDim, *s_dDimLvl, *s_dStarry;
+static lv_obj_t *s_fDisp[5];
 
 // Tunes
 static lv_obj_t *s_tuneList;
@@ -95,6 +131,15 @@ static uint8_t s_nfTunes;
 // SysInfo
 static lv_obj_t *s_sysLabel;
 static char s_cSys[400];
+
+// Sky view (GSV): polar az/elev plot + SNR bars for the strongest sats
+#define SKY_MAX_SATS 24
+#define SKY_MAX_BARS 12
+static lv_obj_t *s_skyDots[SKY_MAX_SATS];
+static lv_obj_t *s_skyBars[SKY_MAX_BARS], *s_skyBarLbl[SKY_MAX_BARS];
+static lv_obj_t *s_skyInfo;
+static GnssSatInfo s_skyLast[SKY_MAX_SATS];
+static uint8_t s_skyLastN;
 
 // Ringing
 static lv_obj_t *s_rgTitle, *s_rgTime, *s_rgHint;
@@ -407,9 +452,12 @@ static void refresh_clock(bool force) {
     set_label_if(s_ckBig, s_cBig, sizeof(s_cBig), big, force);
     if (bigChanged) {
       lv_obj_update_layout(s_ckBig);
-      lv_obj_align_to(s_ckAmpm, s_ckBig, LV_ALIGN_OUT_RIGHT_TOP, 3, 10);
+      // Sit the tag on the digits' baseline: the 100 px font carries 26 px
+      // of descent below it, the 20 px tag font ~5 px.
+      lv_obj_align_to(s_ckAmpm, s_ckBig, LV_ALIGN_OUT_RIGHT_BOTTOM, 4, -21);
     }
     set_label_if(s_ckAmpm, s_cAmpm, sizeof(s_cAmpm), side, force);
+    stars_set(false); // stars belong to the clock face only
 
     if (mode == MODE_GAME) {
       set_label_if(s_ckBottom, s_cBottom, sizeof(s_cBottom),
@@ -419,6 +467,7 @@ static void refresh_clock(bool force) {
   }
 
   if (!clock_valid()) {
+    stars_set(false);
     if (mode == MODE_CLOCK) {
       set_label_if(s_ckBig, s_cBig, sizeof(s_cBig), "--:--", force);
       set_label_if(s_ckSec, s_cSec, sizeof(s_cSec), "", force);
@@ -447,9 +496,16 @@ static void refresh_clock(bool force) {
     set_label_if(s_ckBig, s_cBig, sizeof(s_cBig), b, force);
     if (bigChanged) { // width may change -> re-anchor the AM/PM tag
       lv_obj_update_layout(s_ckBig);
-      lv_obj_align_to(s_ckAmpm, s_ckBig, LV_ALIGN_OUT_RIGHT_TOP, 3, 10);
+      // Sit the tag on the digits' baseline: the 100 px font carries 26 px
+      // of descent below it, the 20 px tag font ~5 px.
+      lv_obj_align_to(s_ckAmpm, s_ckBig, LV_ALIGN_OUT_RIGHT_BOTTOM, 4, -21);
     }
     set_label_if(s_ckAmpm, s_cAmpm, sizeof(s_cAmpm), ampm, force);
+
+    // Starry night: stars behind the digits between 22:00 and 06:00
+    stars_set(settings().starryNight && (h >= 22 || h < 6));
+    if (s_starsShown)
+      stars_twinkle();
   }
   (void)se; // seconds are intentionally not displayed
 
@@ -473,6 +529,24 @@ static void make_clock() {
   lv_obj_t *scr = lv_obj_create(NULL);
   lv_obj_remove_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
   s_scr[SCR_CLOCK] = scr;
+
+  // Stars first: creation order = z-order, labels must draw on top.
+  for (uint8_t i = 0; i < STAR_COUNT; i++) {
+    lv_obj_t *st = lv_obj_create(scr);
+    uint8_t d = (i % 5 == 0) ? 3 : 2;
+    lv_obj_set_size(st, d, d);
+    lv_obj_set_pos(st, (int32_t)STAR_POS[i][0] * 2, STAR_POS[i][1]);
+    lv_obj_set_style_radius(st, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(st, lv_color_white(), 0);
+    lv_obj_set_style_bg_opa(st, (i % 3 == 0)   ? LV_OPA_COVER
+                                : (i % 3 == 1) ? LV_OPA_70
+                                               : LV_OPA_40, 0);
+    lv_obj_set_style_border_width(st, 0, 0);
+    lv_obj_remove_flag(st, (lv_obj_flag_t)(LV_OBJ_FLAG_SCROLLABLE |
+                                           LV_OBJ_FLAG_CLICKABLE));
+    lv_obj_add_flag(st, LV_OBJ_FLAG_HIDDEN);
+    s_stars[i] = st;
+  }
 
   s_ckStatL = lv_label_create(scr);
   lv_obj_set_style_text_font(s_ckStatL, &lv_font_montserrat_16, 0);
@@ -505,9 +579,9 @@ static void make_clock() {
 // ------------------------------------------------------------- Menu scr ---
 enum : uint8_t {
   MENU_ALARM1, MENU_ALARM2, MENU_TZ, MENU_DISPLAY, MENU_TUNES, MENU_SYSINFO,
-  MENU_TAPSNOOZE, MENU_MODE, MENU_BACK
+  MENU_SKY, MENU_TAPSNOOZE, MENU_MODE, MENU_BACK
 };
-#define MENU_COUNT 9
+#define MENU_COUNT 10
 
 static void menu_refresh_tapsnooze() {
   if (s_tapLabel)
@@ -534,6 +608,7 @@ static void menu_btn_cb(lv_event_t *e) {
   case MENU_DISPLAY: load_screen(SCR_DISP); break;
   case MENU_TUNES:   load_screen(SCR_TUNES); break;
   case MENU_SYSINFO: load_screen(SCR_SYS); break;
+  case MENU_SKY:     load_screen(SCR_SKY); break;
   case MENU_TAPSNOOZE: // toggle in place, stay in the menu
     settings().tapSnooze = !settings().tapSnooze;
     settings_save();
@@ -570,7 +645,7 @@ static void make_menu() {
 
   static const char *const NAMES[MENU_COUNT] = {
       "Alarm 1", "Alarm 2",    "Time & zone", "Disp & sound", "Tunes",
-      "System info", "Tap snooze", "Mode",    "Back"};
+      "System info", "Sky view", "Tap snooze", "Mode",    "Back"};
   for (uint8_t i = 0; i < MENU_COUNT; i++)
     s_fMenu[i] = list_add_item(list, NULL, NAMES[i], menu_btn_cb, i);
 
@@ -882,7 +957,17 @@ static void disp_dimlvl_cb(lv_event_t *e) {
   mark_dirty();
 }
 
+static void disp_starry_cb(lv_event_t *e) {
+  (void)e;
+  settings().starryNight = lv_obj_has_state(s_dStarry, LV_STATE_CHECKED);
+  mark_dirty();
+}
+
 static void disp_sync_widgets() {
+  if (settings().starryNight)
+    lv_obj_add_state(s_dStarry, LV_STATE_CHECKED);
+  else
+    lv_obj_remove_state(s_dStarry, LV_STATE_CHECKED);
   lv_slider_set_value(s_dVolume, settings().volume, LV_ANIM_OFF);
   lv_slider_set_value(s_dBright, settings().brightness, LV_ANIM_OFF);
   uint16_t t = settings().dimTimeoutS;
@@ -927,8 +1012,13 @@ static void make_display() {
   lv_obj_set_size(s_dDimLvl, 220, 12);
   lv_obj_add_event_cb(s_dDimLvl, disp_dimlvl_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
-  lv_obj_t *foc[4] = {s_dVolume, s_dBright, s_dDim, s_dDimLvl};
-  for (uint8_t i = 0; i < 4; i++) {
+  row = make_row(scr, "Starry night");
+  s_dStarry = lv_switch_create(row);
+  lv_obj_set_size(s_dStarry, 48, 24);
+  lv_obj_add_event_cb(s_dStarry, disp_starry_cb, LV_EVENT_VALUE_CHANGED, NULL);
+
+  lv_obj_t *foc[5] = {s_dVolume, s_dBright, s_dDim, s_dDimLvl, s_dStarry};
+  for (uint8_t i = 0; i < 5; i++) {
     s_fDisp[i] = foc[i];
     lv_obj_add_flag(foc[i], LV_OBJ_FLAG_SCROLL_ON_FOCUS);
   }
@@ -1057,6 +1147,160 @@ static void make_sysinfo() {
   s_cSys[0] = '\0';
 }
 
+// --------------------------------------------------------- Sky view scr ---
+// Left: polar plot of the visible sky — center = zenith, outer ring =
+// horizon, north up. Right: SNR bars for the SKY_MAX_BARS strongest sats.
+// Dot/bar color = signal quality; label/border color = constellation
+// (white GPS, cyan GLONASS). Data refreshes with each GSV group (~5 s).
+#define SKY_CX 71
+#define SKY_CY 71
+#define SKY_R 63
+#define SKY_BARS_X 158
+#define SKY_BAR_W 14
+#define SKY_BAR_PITCH 22
+#define SKY_BAR_BOTTOM 118
+
+static lv_color_t sky_snr_color(uint8_t snr) {
+  if (snr == 0) // in view (almanac) but not tracked
+    return lv_palette_darken(LV_PALETTE_GREY, 1);
+  if (snr < 20)
+    return lv_palette_main(LV_PALETTE_RED);
+  if (snr < 35)
+    return lv_palette_main(LV_PALETTE_YELLOW);
+  return lv_palette_main(LV_PALETTE_GREEN);
+}
+
+static lv_color_t sky_sys_color(char system) {
+  return system == 'R' ? lv_palette_main(LV_PALETTE_CYAN) : lv_color_white();
+}
+
+static void refresh_sky(bool force) {
+  GnssSatInfo sats[SKY_MAX_SATS];
+  uint8_t n = gnss_get_sats(sats, SKY_MAX_SATS);
+  if (!force && n == s_skyLastN &&
+      memcmp(sats, s_skyLast, n * sizeof(GnssSatInfo)) == 0)
+    return;
+  memcpy(s_skyLast, sats, n * sizeof(GnssSatInfo));
+  s_skyLastN = n;
+
+  uint8_t tracked = 0;
+  for (uint8_t i = 0; i < n; i++)
+    if (sats[i].snrDb > 0)
+      tracked++;
+  if (n == 0)
+    lv_label_set_text_static(s_skyInfo, "waiting for GSV data...");
+  else
+    lv_label_set_text_fmt(s_skyInfo, "%u in view, %u tracked", (unsigned)n,
+                          (unsigned)tracked);
+
+  for (uint8_t i = 0; i < SKY_MAX_SATS; i++) {
+    if (i < n) {
+      // elevation -> radius (zenith at center), azimuth -> angle from north
+      float r = (float)SKY_R * (90.0f - (float)sats[i].elevDeg) / 90.0f;
+      float a = (float)sats[i].azimDeg * 0.017453293f;
+      int32_t x = SKY_CX + (int32_t)lroundf(r * sinf(a));
+      int32_t y = SKY_CY - (int32_t)lroundf(r * cosf(a));
+      lv_obj_set_pos(s_skyDots[i], x - 4, y - 4);
+      lv_obj_set_style_bg_color(s_skyDots[i], sky_snr_color(sats[i].snrDb), 0);
+      lv_obj_set_style_border_color(s_skyDots[i], sky_sys_color(sats[i].system),
+                                    0);
+      lv_obj_remove_flag(s_skyDots[i], LV_OBJ_FLAG_HIDDEN);
+    } else {
+      lv_obj_add_flag(s_skyDots[i], LV_OBJ_FLAG_HIDDEN);
+    }
+  }
+
+  // Bars show the strongest sats first (insertion sort by SNR, descending).
+  uint8_t order[SKY_MAX_SATS];
+  for (uint8_t i = 0; i < n; i++) {
+    uint8_t j = i;
+    while (j && sats[order[j - 1]].snrDb < sats[i].snrDb) {
+      order[j] = order[j - 1];
+      j--;
+    }
+    order[j] = i;
+  }
+  for (uint8_t i = 0; i < SKY_MAX_BARS; i++) {
+    if (i < n) {
+      const GnssSatInfo &s = sats[order[i]];
+      int32_t h = 6 + (int32_t)s.snrDb * 82 / 55; // 0..55 dB-Hz -> 6..88 px
+      if (h > 88)
+        h = 88;
+      lv_obj_set_size(s_skyBars[i], SKY_BAR_W, h);
+      lv_obj_set_pos(s_skyBars[i], SKY_BARS_X + i * SKY_BAR_PITCH,
+                     SKY_BAR_BOTTOM - h);
+      lv_obj_set_style_bg_color(s_skyBars[i], sky_snr_color(s.snrDb), 0);
+      lv_label_set_text_fmt(s_skyBarLbl[i], "%u", (unsigned)s.prn);
+      lv_obj_set_style_text_color(s_skyBarLbl[i], sky_sys_color(s.system), 0);
+      lv_obj_remove_flag(s_skyBars[i], LV_OBJ_FLAG_HIDDEN);
+      lv_obj_remove_flag(s_skyBarLbl[i], LV_OBJ_FLAG_HIDDEN);
+    } else {
+      lv_obj_add_flag(s_skyBars[i], LV_OBJ_FLAG_HIDDEN);
+      lv_obj_add_flag(s_skyBarLbl[i], LV_OBJ_FLAG_HIDDEN);
+    }
+  }
+}
+
+static void make_sky() {
+  lv_obj_t *scr = lv_obj_create(NULL);
+  lv_obj_remove_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
+  s_scr[SCR_SKY] = scr;
+
+  // Elevation rings: horizon (0 deg) and 45 deg
+  static const int32_t RADII[2] = {SKY_R, SKY_R / 2};
+  for (int i = 0; i < 2; i++) {
+    lv_obj_t *ring = lv_obj_create(scr);
+    lv_obj_set_size(ring, RADII[i] * 2, RADII[i] * 2);
+    lv_obj_set_pos(ring, SKY_CX - RADII[i], SKY_CY - RADII[i]);
+    lv_obj_set_style_radius(ring, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_opa(ring, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(ring, 1, 0);
+    lv_obj_set_style_border_color(ring, lv_palette_darken(LV_PALETTE_GREY, 2),
+                                  0);
+    lv_obj_remove_flag(ring, (lv_obj_flag_t)(LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE));
+  }
+  lv_obj_t *north = lv_label_create(scr);
+  lv_obj_set_style_text_font(north, &lv_font_montserrat_14, 0);
+  lv_obj_set_style_text_color(north, lv_palette_main(LV_PALETTE_GREY), 0);
+  lv_label_set_text_static(north, "N");
+  lv_obj_set_pos(north, SKY_CX - 5, SKY_CY - SKY_R + 1);
+
+  for (uint8_t i = 0; i < SKY_MAX_SATS; i++) {
+    lv_obj_t *d = lv_obj_create(scr);
+    lv_obj_set_size(d, 9, 9);
+    lv_obj_set_style_radius(d, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_opa(d, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(d, 1, 0);
+    lv_obj_set_style_pad_all(d, 0, 0);
+    lv_obj_remove_flag(d, (lv_obj_flag_t)(LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE));
+    lv_obj_add_flag(d, LV_OBJ_FLAG_HIDDEN);
+    s_skyDots[i] = d;
+  }
+
+  s_skyInfo = lv_label_create(scr);
+  lv_obj_set_style_text_font(s_skyInfo, &lv_font_montserrat_16, 0);
+  lv_obj_set_pos(s_skyInfo, SKY_BARS_X, 2);
+
+  for (uint8_t i = 0; i < SKY_MAX_BARS; i++) {
+    lv_obj_t *bar = lv_obj_create(scr);
+    lv_obj_set_style_radius(bar, 2, 0);
+    lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(bar, 0, 0);
+    lv_obj_remove_flag(bar, (lv_obj_flag_t)(LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE));
+    lv_obj_add_flag(bar, LV_OBJ_FLAG_HIDDEN);
+    s_skyBars[i] = bar;
+
+    lv_obj_t *lbl = lv_label_create(scr);
+    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_width(lbl, SKY_BAR_PITCH);
+    lv_obj_set_pos(lbl, SKY_BARS_X + i * SKY_BAR_PITCH - 4, SKY_BAR_BOTTOM + 4);
+    lv_obj_add_flag(lbl, LV_OBJ_FLAG_HIDDEN);
+    s_skyBarLbl[i] = lbl;
+  }
+  s_skyLastN = 255; // force first refresh to lay everything out
+}
+
 // ---------------------------------------------------------- Ringing scr ---
 static void make_ringing() {
   lv_obj_t *scr = lv_obj_create(NULL);
@@ -1094,7 +1338,7 @@ static void load_screen(UiScreen id) {
     break;
   case SCR_ALARM: alarm_sync_widgets(); group_set(s_fAlarm, 9); break;
   case SCR_TZ:    tz_sync_widgets(); group_set(s_fTz, 4); break;
-  case SCR_DISP:  disp_sync_widgets(); group_set(s_fDisp, 4); break;
+  case SCR_DISP:  disp_sync_widgets(); group_set(s_fDisp, 5); break;
   case SCR_TUNES:
     tunes_rebuild();
     group_set(s_fTunes, s_nfTunes);
@@ -1104,6 +1348,10 @@ static void load_screen(UiScreen id) {
   case SCR_SYS:
     refresh_sysinfo(true);
     lv_obj_scroll_to_y(s_scr[SCR_SYS], 0, LV_ANIM_OFF);
+    group_set(NULL, 0);
+    break;
+  case SCR_SKY:
+    refresh_sky(true);
     group_set(NULL, 0);
     break;
   case SCR_RING:  group_set(NULL, 0); break;
@@ -1239,6 +1487,7 @@ static void nav_back() {
   case SCR_DISP:
   case SCR_TUNES:
   case SCR_SYS:
+  case SCR_SKY:
     load_screen(SCR_MENU);
     break;
   default:
@@ -1293,10 +1542,11 @@ void ui_begin() {
   make_display();
   make_tunes();
   make_sysinfo();
+  make_sky();
   make_ringing();
 
   // Force every screen's MAIN part to true black now that all are built.
-  for (int i = 0; i < 8; i++)
+  for (int i = 0; i < SCR_COUNT; i++)
     blacken(s_scr[i]);
 
   s_lastActMs = millis();
@@ -1433,6 +1683,7 @@ void ui_task() {
   case SCR_CLOCK: refresh_clock(false); break;
   case SCR_TZ:    refresh_tz_info(false); break;
   case SCR_SYS:   refresh_sysinfo(false); break;
+  case SCR_SKY:   refresh_sky(false); break;
   default:        break;
   }
 }

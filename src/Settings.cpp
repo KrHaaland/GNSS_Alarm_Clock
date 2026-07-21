@@ -63,7 +63,8 @@ static uint8_t ramp_idx(uint8_t secs) {
       return i;
   return 0;
 }
-// flags byte: b0 tzAuto, b1 tapSnooze, b2 use24h, b3 havePosition, b4-5 mode
+// flags byte: b0 tzAuto, b1 tapSnooze, b2 use24h, b3 havePosition, b4-5 mode,
+// b6 starryNight (added post-v3; old blocks carry 0 = off, no version bump)
 // alarm flags byte: b0 enabled
 
 static Settings s;
@@ -117,7 +118,7 @@ static void pack(const Settings &in, uint8_t out[PACK_LEN]) {
   out[OFF_VERSION] = PACK_VERSION;
   out[OFF_FLAGS] = (in.tzAuto ? 1 : 0) | (in.tapSnooze ? 2 : 0) |
                    (in.use24h ? 4 : 0) | (in.havePosition ? 8 : 0) |
-                   ((in.mode & 3) << 4);
+                   ((in.mode & 3) << 4) | (in.starryNight ? 0x40 : 0);
   put16(&out[OFF_LAT], (uint16_t)centideg(in.lastLat));
   put16(&out[OFF_LON], (uint16_t)centideg(in.lastLon));
   int zi = tztable_index_of_posix(in.tzPosix);
@@ -178,6 +179,7 @@ static void unpack(const uint8_t in[PACK_LEN], Settings &out) {
   out.use24h = f & 4;
   out.havePosition = f & 8;
   out.mode = (uint8_t)((f >> 4) & 3) % MODE_COUNT;
+  out.starryNight = f & 0x40;
   out.lastLat = (int16_t)get16(&in[OFF_LAT]) / 100.0f;
   out.lastLon = (int16_t)get16(&in[OFF_LON]) / 100.0f;
   out.volume = in[OFF_VOLUME] <= 10 ? in[OFF_VOLUME] : 10;
@@ -258,6 +260,7 @@ void settings_defaults() {
   s.tapSnooze = true;
 
   s.use24h = true;
+  s.starryNight = false;
   s.mode = MODE_CLOCK;
   s.brightness = 0x90;
   s.dimTimeoutS = 30;

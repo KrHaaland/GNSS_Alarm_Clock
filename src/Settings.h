@@ -54,6 +54,7 @@ struct Settings {
   bool tapSnooze;         // LIS3DH tap = snooze while ringing
 
   bool use24h;
+  bool starryNight;        // stars behind the clock between 22:00 and 06:00
   uint8_t mode;            // main-screen mode (MODE_CLOCK/SPEED/ALT)
   uint8_t brightness;      // display contrast 0..255
   uint16_t dimTimeoutS;    // dim display after N s idle, 0 = never

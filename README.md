@@ -23,8 +23,9 @@ a 428×142 color TFT driven by four buttons.
 
 ## What it does
 
-- **Time**: The Quectel **L86** GNSS receiver (Serial1, 9600 NMEA, RMC+GGA @1 Hz,
-  TinyGPS++) provides UTC. The clock is a `millis()`-anchored UTC counter
+- **Time**: The Quectel **L86** GNSS receiver (Serial1, 9600 NMEA, RMC+GGA @1 Hz
+  plus GSV satellites-in-view every 5 s for the Sky-view screen, TinyGPS++ +
+  a small in-house GSV parser) provides UTC. The clock is a `millis()`-anchored UTC counter
   disciplined by GNSS (re-syncs hourly / on ≥2 s drift) and backed by the
   **RV-3028-C7** RTC (I²C 0x52), whose VBACKUP sits on the supercap rail so it
   holds time through power loss. On boot the clock starts from the RTC
@@ -60,8 +61,10 @@ a 428×142 color TFT driven by four buttons.
     **Stop**: long-press any button.
 - **UI**: **LVGL 9.5** on an **NV3007 color TFT** (see below), driven by the 4
   buttons above the display: `[Back/Menu] [Prev/–] [Next/+] [OK]`. Screens:
-  clock, menu, alarm-edit, time & zone, display, tunes, system-info, ringing.
-  A true-black theme keeps the panel dark.
+  clock, menu, alarm-edit, time & zone, display, tunes, system-info,
+  **sky view** (GSV polar plot + SNR bars — indoor antenna-placement aid),
+  ringing. A true-black theme keeps the panel dark. Optional **starry night**:
+  twinkling stars behind the clock digits between 22:00 and 06:00.
 - **Modes** (Menu → Mode, cycles in place; alarms keep working in all of them):
   - **Alarm clock** — the normal HH:MM face.
   - **Speedometer** — the big figure shows GNSS ground speed in **km/h**.
@@ -128,7 +131,7 @@ are stored as 16-bit FNV-1a hashes re-matched against the TUNES directory
 |---|---|---|
 | `0x00` | 2 | Magic `'G' 'C'` |
 | `0x02` | 1 | Pack-format version (3) |
-| `0x03` | 1 | Flags: b0 tzAuto, b1 tapSnooze, b2 use24h, b3 havePosition, b4–5 mode |
+| `0x03` | 1 | Flags: b0 tzAuto, b1 tapSnooze, b2 use24h, b3 havePosition, b4–5 mode, b6 starryNight |
 | `0x04` | 2 | Latitude, centidegrees (i16) |
 | `0x06` | 2 | Longitude, centidegrees (i16) |
 | `0x08` | 1 | Manual zone index into `TZ_TABLE` (`0xFF` = none/auto) |
@@ -279,7 +282,7 @@ normal build — zero production-flash cost.
 | `src/AudioEngine.*` | TC2 ISR → DAC0 playback, WAV streaming, melodies, buzzer |
 | `src/TuneStorage.*` | QSPI flash, FAT12 volume, USB mass storage |
 | `src/DisplayST7789.*` | ST7789 driver + LVGL 9 flush (RGB565), bring-up self-test |
-| `src/Ui.*` | LVGL screens: clock, menu, alarm edit, zone, display, tunes, info, ringing |
+| `src/Ui.*` | LVGL screens: clock, menu, alarm edit, zone, display, tunes, info, sky view, ringing |
 | `src/Buttons.*` / `src/Leds.*` | Debounced input, LED section patterns |
 | `src/AmpTPA2016.*` / `src/AccelLIS3DH.*` | Amp gain/enable, double-tap-to-snooze |
 | `src/Settings.*` | Persistent settings in internal flash (emulated EEPROM) |

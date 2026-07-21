@@ -28,6 +28,8 @@ Dropdown lists open as a full-screen overlay with the current choice centered.
   alarm is enabled). Bottom: date and next alarm.
 - Display dims after the configured timeout — any button **or a small
   shake/tap** wakes it (LIS3DH motion).
+- **Starry night** (Disp & sound): between **22:00 and 06:00** a couple dozen
+  faintly twinkling stars appear behind the digits. Clock mode only.
 
 ## Menu
 
@@ -37,9 +39,10 @@ Dropdown lists open as a full-screen overlay with the current choice centered.
 |---|---|
 | Alarm 1 / Alarm 2 | Enable switch, time rollers, weekday matrix (S M T W T F S — **no days selected = every day**), tune dropdown, **Ramp** (per-alarm gentle wake: Off/15/30/60 s), **Random** (the alarm fires at a random offset of ±1/±5/±9 min around the set time — a new roll every occurrence, and the display still shows the set time so you can't cheat), Test, Save. *Back does not save.* |
 | Time & zone | **Auto TZ (GNSS)** on/off; manual **Zone** = the full GMT ladder (GMT−12…+14 incl. half/quarter hours, fixed offsets, no DST); 24 h switch; **Sync now**. |
-| Disp & sound | **Volume** (0–10, live while a tune plays), brightness slider (live), dim-after timeout, dim level. |
+| Disp & sound | **Volume** (0–10, live while a tune plays), brightness slider (live), dim-after timeout, dim level, **Starry night** (stars behind the clock 22–06). |
 | Tunes | Preview built-in melodies and WAVs from the TUNES drive (press again to stop). Unavailable while the USB host owns the drive. |
 | System info | Fix/sats/HDOP, position, speed/altitude, zone + POSIX string, UTC offset/DST, GNSS sync age, RTC status, caps status, **snooze counters**, FW version. Scroll with B2/B3. |
+| Sky view | Live satellite map: left a **polar plot** (center = straight up, outer ring = horizon, N = north; dot color green/yellow/red/grey = signal strength, border white = GPS / cyan = GLONASS), right **SNR bars** for the strongest 12 with PRN numbers (65–96 = GLONASS). Updates every ~5 s — walk the clock around to find the best indoor reception spot. Works without a fix. |
 | Tap snooze | Toggle double-tap-to-snooze. |
 | Mode | Cycles the main screen: **Alarm clock → Speedometer → Altimeter → Game mode**. |
 | Back | To the clock. |

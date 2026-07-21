@@ -25,7 +25,7 @@ on the RTC (below); it does not stop the clock from working off GNSS.
 | LEDs (3 sections) | ✅ Working | Chase/blink from supercap rail |
 | Tunes over USB | ✅ Working | QSPI flash as `TUNES` drive (16 MB) |
 | Settings persistence | ✅ Working | RV-3028 user EEPROM (39 B packed) — survives reboot **and reflash** (verified) |
-| UI (8 screens) | ✅ Working | 4-button nav, true-black theme |
+| UI (9 screens) | ✅ Working | 4-button nav, true-black theme, starry-night option |
 
 ---
 
@@ -142,6 +142,21 @@ ping-pong buffer into DAC0, with one IRQ per 2048-sample half. Underrun
 guard silences a stale half; per-sample ISR kept as fallback. Verified:
 WAV/melodies play cleanly while scrolling the UI — pixels and samples
 stream concurrently on two DMAC channels.
+
+**Sky view (GSV):** new screen — polar az/elev plot + SNR bars of every
+satellite in view, colored by signal and constellation (GPS/GLONASS). The L86
+now emits GSV every 5th fix (PMTK314; full-rate GSV would crowd the 9600-baud
+link) and a small in-house parser runs beside TinyGPS++ (which lacks GSV).
+Works without a fix — this is the indoor antenna-placement aid.
+
+**Starry night:** optional (Disp & sound) — 26 twinkling stars behind the
+clock digits between 22:00 and 06:00, clock mode only. Stored in a spare
+flags bit (b6), no EEPROM format bump. Also: AM/PM and unit tags now sit on
+the big digits' baseline.
+
+**Post-mortem:** the sky screen's ~50 LVGL objects exhausted the 48 KB LVGL
+pool at boot — LV_ASSERT_MALLOC hangs in a loop with a black panel (USB alive
+via IRQs, hence the confusing symptom). Pool now 64 KB, RAM 71.7 %.
 
 **Docs:** README refreshed to current reality; this STATUS report added.
 
