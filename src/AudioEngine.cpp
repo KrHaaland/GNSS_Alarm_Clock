@@ -1,23 +1,38 @@
-// AudioEngine.cpp — TC2-paced DAC playback: WAV streaming from the QSPI
-// tune volume plus builtin synthesized melodies. See AudioEngine.h.
+// AudioEngine.cpp — DMA-paced DAC playback: TC2 (MFRQ at the sample rate)
+// triggers one DMAC beat per sample out of a two-half ping-pong buffer; a
+// per-half IRQ flips buffers and audio_task() refills from the main loop.
+// WAV streaming from the QSPI tune volume plus builtin synthesized melodies.
 #include "AudioEngine.h"
 #include "TuneStorage.h"
 #include "pins.h"
+#include <Adafruit_ZeroDMA.h>
 
 const char *const AUDIO_MELODY_NAMES[AUDIO_MELODY_COUNT] = {
     "Sunrise", "Classic beep", "Chime"};
 
 // ---------------------------------------------------------------- ring ---
-#define RING_SIZE 4096u
-#define RING_MASK (RING_SIZE - 1u)
-static volatile uint16_t ring[RING_SIZE]; // ready-to-play 12-bit samples
-static volatile uint16_t rHead;           // ISR pops here
-static volatile uint16_t rTail;           // audio_task pushes here
+// Two 2048-sample halves in a looped DMA descriptor chain (A -> B -> A ...):
+// ~93 ms per half at 22.05 kHz, ~43 ms at 48 kHz. BLOCKACT=INT fires the
+// half-complete callback without pausing the channel; audio_task() refills
+// the freed half while the other plays.
+#define HALF_SAMPLES 2048u
+static uint16_t ring[2][HALF_SAMPLES] __attribute__((aligned(4)));
+static volatile bool halfNeedsData[2]; // half is played out, free to refill
+static volatile uint32_t halvesPlayed; // bumped per finished half (IRQ)
+static uint8_t fillHalf;               // next half audio_task should fill
+static uint32_t drainTarget;           // halvesPlayed value that ends DRAIN
 
 enum SrcState { SRC_IDLE, SRC_WAV, SRC_MELODY, SRC_DRAIN };
 static SrcState srcState = SRC_IDLE;
 static bool loopFlag;
 static bool dacReady; // audio_begin ran
+
+// DMA channel (ring -> DAC). If allocation ever fails, the driver falls
+// back to the old per-sample TC2 IRQ walking the same halves.
+static Adafruit_ZeroDMA audioDma;
+static bool dmaOk;
+static volatile uint32_t isrPos; // fallback path cursor
+static volatile uint8_t isrHalf;
 
 // Digital volume, Q8 (256 = unity). Exponential-ish steps, ~3 dB apart.
 static const uint16_t VOL_TABLE[11] = {0,   16,  24,  34,  48, 68,
@@ -26,6 +41,7 @@ static uint16_t volFactor = 165; // default vol 8
 
 // ------------------------------------------------------------ TC2 timer ---
 // GCLK0 = 120 MHz, prescaler /8 -> 15 MHz count clock; MFRQ overflows at CC0.
+// Each overflow raises the TC2 DMA request = one sample beat.
 #define TC2_BASE_HZ 15000000ul
 
 static void tc2_sync_enable() {
@@ -33,7 +49,7 @@ static void tc2_sync_enable() {
   }
 }
 
-static void tc2_init() {
+static void tc2_init(bool withIrq) {
   MCLK->APBBMASK.bit.TC2_ = 1;
   GCLK->PCHCTRL[TC2_GCLK_ID].reg = GCLK_PCHCTRL_GEN_GCLK0 | GCLK_PCHCTRL_CHEN;
   while (!(GCLK->PCHCTRL[TC2_GCLK_ID].reg & GCLK_PCHCTRL_CHEN)) {
@@ -45,10 +61,12 @@ static void tc2_init() {
   }
   TC2->COUNT16.CTRLA.reg = TC_CTRLA_MODE_COUNT16 | TC_CTRLA_PRESCALER_DIV8;
   TC2->COUNT16.WAVE.reg = TC_WAVE_WAVEGEN_MFRQ;
-  TC2->COUNT16.INTENSET.reg = TC_INTENSET_OVF;
-  NVIC_SetPriority(TC2_IRQn, 1);
-  NVIC_ClearPendingIRQ(TC2_IRQn);
-  NVIC_EnableIRQ(TC2_IRQn);
+  if (withIrq) { // fallback only — the DMA path needs no per-sample IRQ
+    TC2->COUNT16.INTENSET.reg = TC_INTENSET_OVF;
+    NVIC_SetPriority(TC2_IRQn, 1);
+    NVIC_ClearPendingIRQ(TC2_IRQn);
+    NVIC_EnableIRQ(TC2_IRQn);
+  }
 }
 
 static void tc2_start(uint32_t sampleRate) {
@@ -75,30 +93,47 @@ static void tc2_stop() {
   tc2_sync_enable();
 }
 
-void TC2_Handler() {
-  TC2->COUNT16.INTFLAG.reg = TC_INTFLAG_OVF;
-  uint16_t h = rHead;
-  if (h == rTail) {
-    DAC->DATA[0].reg = 2048; // underrun: hold midpoint
-  } else {
-    // Previous conversion finished long ago at <=48 kHz; plain write is safe.
-    DAC->DATA[0].reg = ring[h];
-    rHead = (h + 1) & RING_MASK;
+// A half just finished playing (IRQ context, either path). Free it for
+// refill; if the half now *starting* was never refilled (main loop stalled
+// past a whole half period), overwrite it with silence so stale audio does
+// not loop audibly — the analog of the old ISR's midpoint hold.
+static void half_played(uint8_t finished) {
+  halvesPlayed++;
+  halfNeedsData[finished] = true;
+  uint8_t next = finished ^ 1;
+  if (halfNeedsData[next]) {
+    for (uint32_t i = 0; i < HALF_SAMPLES; i++)
+      ring[next][i] = 2048;
   }
 }
 
-static uint32_t ring_free() {
-  return ((uint32_t)rHead - rTail - 1u) & RING_MASK;
+static void dma_half_cb(Adafruit_ZeroDMA *) {
+  // Descriptors complete strictly alternating, A first.
+  half_played((uint8_t)(halvesPlayed & 1));
 }
 
-static void ring_push(uint16_t v) {
-  uint16_t t = rTail;
-  ring[t] = v;
-  rTail = (t + 1) & RING_MASK; // volatile store orders after sample store
+void TC2_Handler() { // fallback path only (DMA channel unavailable)
+  TC2->COUNT16.INTFLAG.reg = TC_INTFLAG_OVF;
+  DAC->DATA[0].reg = ring[isrHalf][isrPos];
+  if (++isrPos >= HALF_SAMPLES) {
+    isrPos = 0;
+    uint8_t fin = isrHalf;
+    isrHalf ^= 1;
+    half_played(fin);
+  }
 }
 
 static uint16_t apply_volume(int32_t s12) {
   return (uint16_t)(2048 + (((s12 - 2048) * (int32_t)volFactor) >> 8));
+}
+
+// Source ran dry mid-half: pad with midpoint, then stop once both queued
+// halves (this one + the one currently playing) have been heard.
+static void enter_drain(uint16_t *p, uint32_t left) {
+  while (left--)
+    *p++ = 2048;
+  srcState = SRC_DRAIN;
+  drainTarget = halvesPlayed + 2;
 }
 
 // ------------------------------------------------------------ WAV source ---
@@ -168,24 +203,23 @@ static uint32_t wav_parse(File32 &f) {
   return 0;
 }
 
-static void wav_fill() {
+// Fill fillHalf completely (real samples, else midpoint padding + DRAIN).
+static void wav_fill_half() {
   if (!storage_mounted() || storage_busy()) {
     audio_stop(); // USB host owns the drive: abandon playback
     return;
   }
-  for (;;) {
-    uint32_t freeSlots = ring_free();
-    if (freeSlots < 256)
-      return;
+  uint16_t *p = (uint16_t *)ring[fillHalf];
+  uint32_t left = HALF_SAMPLES;
+  while (left) {
     if (wavBytesLeft == 0) {
       if (loopFlag && wavFile.seekSet(wavDataStart)) {
         wavBytesLeft = wavDataSize;
       } else {
-        srcState = SRC_DRAIN;
-        return;
+        break;
       }
     }
-    uint32_t want = freeSlots * wavFrameBytes;
+    uint32_t want = left * wavFrameBytes;
     if (want > sizeof(fileBuf))
       want = sizeof(fileBuf);
     if (want > wavBytesLeft)
@@ -196,10 +230,8 @@ static void wav_fill() {
       continue;
     }
     int n = wavFile.read(fileBuf, want);
-    if (n <= 0) {
-      srcState = SRC_DRAIN;
-      return;
-    }
+    if (n <= 0)
+      break;
     wavBytesLeft -= (uint32_t)n;
     n -= n % wavFrameBytes;
     for (int i = 0; i < n; i += wavFrameBytes) {
@@ -215,9 +247,14 @@ static void wav_fill() {
           s = (s + (int16_t)rd_u16(fileBuf + i + 2)) >> 1;
         s12 = (s >> 4) + 2048;
       }
-      ring_push(apply_volume(s12));
+      *p++ = apply_volume(s12);
+      left--;
     }
   }
+  if (left)
+    enter_drain(p, left);
+  halfNeedsData[fillHalf] = false;
+  fillHalf ^= 1;
 }
 
 // --------------------------------------------------------- melody source ---
@@ -299,21 +336,16 @@ static bool mel_load_note() { // false = melody finished (no loop)
   return true;
 }
 
-static void melody_fill() {
-  uint32_t freeSlots = ring_free();
-  if (freeSlots < 256)
-    return;
-  while (freeSlots--) {
-    if (melNoteLeft == 0 && melGapLeft == 0) {
-      if (!mel_load_note()) {
-        srcState = SRC_DRAIN;
-        return;
-      }
-    }
+static void melody_fill_half() {
+  uint16_t *p = (uint16_t *)ring[fillHalf];
+  uint32_t left = HALF_SAMPLES;
+  while (left) {
+    if (melNoteLeft == 0 && melGapLeft == 0 && !mel_load_note())
+      break;
     if (melNoteLeft) {
       melNoteLeft--;
       if (melNoteIsRest) {
-        ring_push(2048);
+        *p++ = 2048;
       } else {
         melPhase += melPhaseInc;
         int32_t s = SINE_LUT[melPhase >> 24];
@@ -321,23 +353,70 @@ static void melody_fill() {
         if (melEnvQ16 > melEnvStep)
           melEnvQ16 -= melEnvStep;
         // full scale: 127 * 256 * 256 >> 12 = 2032
-        ring_push((uint16_t)(2048 + ((s * env * (int32_t)volFactor) >> 12)));
+        *p++ = (uint16_t)(2048 + ((s * env * (int32_t)volFactor) >> 12));
       }
     } else {
       melGapLeft--;
-      ring_push(2048);
+      *p++ = 2048;
     }
+    left--;
   }
+  if (left)
+    enter_drain(p, left);
+  halfNeedsData[fillHalf] = false;
+  fillHalf ^= 1;
 }
 
 // ------------------------------------------------------------------ API ---
 void audio_begin() {
   // Adafruit core powers up DAC0 on PA02 and leaves it enabled; after this
-  // we own DAC->DATA[0] directly from the TC2 ISR.
+  // we own DAC->DATA[0] directly (DMA beats, or the fallback TC2 ISR).
   analogWriteResolution(12);
   analogWrite(PIN_AUDIO_DAC, 2048);
   dacReady = true;
-  tc2_init();
+
+  // One DMA beat (halfword, ring -> DAC DATA) per TC2 overflow. The two
+  // half descriptors are linked in a loop; BLOCKACT=INT gives a per-half
+  // callback while the channel keeps running.
+  audioDma.setTrigger(TC2_DMAC_ID_OVF);
+  audioDma.setAction(DMA_TRIGGER_ACTON_BEAT);
+  if (audioDma.allocate() == DMA_STATUS_OK) {
+    audioDma.loop(true);
+    DmacDescriptor *dA = audioDma.addDescriptor(
+        ring[0], (void *)&DAC->DATA[0].reg, HALF_SAMPLES, DMA_BEAT_SIZE_HWORD,
+        true /*src increments*/, false /*fixed dst*/);
+    DmacDescriptor *dB = audioDma.addDescriptor(
+        ring[1], (void *)&DAC->DATA[0].reg, HALF_SAMPLES, DMA_BEAT_SIZE_HWORD,
+        true, false);
+    if (dA && dB) {
+      dA->BTCTRL.bit.BLOCKACT = DMA_BLOCK_ACTION_INT;
+      dB->BTCTRL.bit.BLOCKACT = DMA_BLOCK_ACTION_INT;
+      audioDma.setCallback(dma_half_cb);
+      dmaOk = true;
+    }
+  }
+  tc2_init(!dmaOk); // no DMA channel -> keep the per-sample IRQ path
+}
+
+// Reset the ping-pong state and pre-silence both halves (covers sources
+// shorter than one half and the tail after DRAIN padding).
+static void prime_reset() {
+  fillHalf = 0;
+  halvesPlayed = 0;
+  isrHalf = 0;
+  isrPos = 0;
+  for (uint32_t i = 0; i < HALF_SAMPLES; i++) {
+    ring[0][i] = 2048;
+    ring[1][i] = 2048;
+  }
+  halfNeedsData[0] = halfNeedsData[1] = true;
+}
+
+static bool start_paced(uint32_t rate) {
+  if (dmaOk && audioDma.startJob() != DMA_STATUS_OK)
+    return false;
+  tc2_start(rate);
+  return true;
 }
 
 bool audio_play_wav(const char *filename, bool loop) {
@@ -359,8 +438,16 @@ bool audio_play_wav(const char *filename, bool loop) {
   wavBytesLeft = wavDataSize;
   loopFlag = loop;
   srcState = SRC_WAV;
-  wav_fill(); // prime before the timer starts eating samples
-  tc2_start(rate);
+  prime_reset();
+  wav_fill_half(); // prime before the pacer starts eating samples
+  if (srcState == SRC_WAV)
+    wav_fill_half();
+  if (srcState == SRC_IDLE) // storage vanished mid-prime
+    return false;
+  if (!start_paced(rate)) {
+    audio_stop();
+    return false;
+  }
   return true;
 }
 
@@ -375,15 +462,20 @@ void audio_play_melody(uint8_t id, bool loop) {
   melGapLeft = 0;
   loopFlag = loop;
   srcState = SRC_MELODY;
-  melody_fill();
-  tc2_start(MELODY_RATE);
+  prime_reset();
+  melody_fill_half();
+  if (srcState == SRC_MELODY)
+    melody_fill_half();
+  if (!start_paced(MELODY_RATE))
+    audio_stop();
 }
 
 void audio_stop() {
   tc2_stop();
+  if (dmaOk)
+    audioDma.abort();
   srcState = SRC_IDLE;
-  rHead = 0;
-  rTail = 0;
+  halfNeedsData[0] = halfNeedsData[1] = false;
   if (wavFile.isOpen())
     wavFile.close();
   if (dacReady)
@@ -395,13 +487,15 @@ bool audio_playing() { return srcState != SRC_IDLE; }
 void audio_task() {
   switch (srcState) {
   case SRC_WAV:
-    wav_fill();
+    while (srcState == SRC_WAV && halfNeedsData[fillHalf])
+      wav_fill_half();
     break;
   case SRC_MELODY:
-    melody_fill();
+    while (srcState == SRC_MELODY && halfNeedsData[fillHalf])
+      melody_fill_half();
     break;
   case SRC_DRAIN:
-    if (rHead == rTail)
+    if (halvesPlayed >= drainTarget)
       audio_stop();
     break;
   default:

@@ -1,8 +1,10 @@
 // AudioEngine.h — DAC audio playback for alarm tunes.
 //
-// Pipeline: TC2 timer ISR at the sample rate pops samples from a lock-free
-// ring buffer and writes DAC0 (PA02, 12-bit) -> AC coupled -> TPA2016D2 ->
-// speaker (J6). The ring is refilled from loop() context by audio_task():
+// Pipeline: TC2 (MFRQ at the sample rate) triggers one DMA beat per sample
+// from a two-half ping-pong buffer into DAC0 (PA02, 12-bit) -> AC coupled ->
+// TPA2016D2 -> speaker (J6). Only the half-complete IRQ runs on the CPU
+// (per ~2048 samples, not per sample); a TC2-ISR fallback covers DMA-channel
+// allocation failure. Halves are refilled from loop() context by audio_task():
 //  - WAV files streamed from the QSPI flash FAT volume (PCM u8/s16,
 //    mono/stereo downmixed, 8..48 kHz — timer runs at the file's rate)
 //  - builtin synthesized melodies (sine with decay envelope, note tables)

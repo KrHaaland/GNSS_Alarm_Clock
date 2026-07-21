@@ -136,6 +136,13 @@ transfer and the main loop no longer stalls during flushes. Synchronous
 DRE-loop kept as automatic fallback. User-verified on hardware: "displayet
 er smooth!"
 
+**DMA-paced audio (ADR-0013):** the per-sample TC2 ISR (22–48 k IRQ/s) is
+gone — TC2 overflow now triggers one DMAC beat per sample from a two-half
+ping-pong buffer into DAC0, with one IRQ per 2048-sample half. Underrun
+guard silences a stale half; per-sample ISR kept as fallback. Verified:
+WAV/melodies play cleanly while scrolling the UI — pixels and samples
+stream concurrently on two DMAC channels.
+
 **Docs:** README refreshed to current reality; this STATUS report added.
 
 ---

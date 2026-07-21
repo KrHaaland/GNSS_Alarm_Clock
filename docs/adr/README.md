@@ -17,3 +17,4 @@ the decision, and its consequences. Newest last. Format: lightweight MADR.
 | [0010](0010-amp-loudness-architecture.md) | Amp loudness: AGC leveling, limiter as volume | Accepted |
 | [0011](0011-display-panel-select-and-subset-font.md) | Panel select + subset clock font | Accepted |
 | [0012](0012-async-dma-display-flush.md) | Async DMA display flush + double buffering | Accepted |
+| [0013](0013-dma-paced-dac-audio.md) | DMA-paced DAC audio playback | Accepted |
