@@ -6,10 +6,11 @@
 #include "pins.h"
 #include <SPI.h>
 
-// 24 MHz (SAMD51 SERCOM max). NV3007 handles 40 MHz on ESP32 hardware, so
-// this is comfortably inside spec. NOTE: NV3007 requires SPI MODE 0 (unlike
-// ST7789 setups that tolerate mode 3).
-static const uint32_t kSpiHz = 24000000;
+// 30 MHz: SERCOM2 is re-clocked from the 120 MHz source (setClockSource in
+// display_init; the default 48 MHz source tops out at 24). NV3007's reliable
+// ceiling is ~40 MHz per bench reports, so 30 keeps margin — drop to 24 if
+// artifacts ever show over the wiring. NOTE: NV3007 requires SPI MODE 0.
+static const uint32_t kSpiHz = 30000000;
 
 // Bring-up aid: when 1, display_init() runs an on-glass pattern self-test
 // (RGB fills, edge border, origin marker) in an infinite loop INSTEAD of
@@ -47,6 +48,27 @@ static void wr_data(const uint8_t *d, size_t n) {
     SPI.transfer(d[i]);
 }
 
+// Stream bytes at wire speed: DRE-paced writes straight into SERCOM2's DATA
+// register. Per-byte SPI.transfer() waits out a full RX round-trip per byte
+// (call overhead + RXC poll), roughly halving throughput; here SCK runs
+// back-to-back (DATA is double-buffered). The unread RX side overflows by
+// design — drained and cleared afterwards so SPI.transfer() keeps working
+// for command bytes.
+static void spi_write_bulk(const uint8_t *d, uint32_t n) {
+  volatile SercomSpi &spi = SERCOM2->SPI;
+  for (uint32_t i = 0; i < n; i++) {
+    while (!spi.INTFLAG.bit.DRE) {
+    }
+    spi.DATA.reg = d[i];
+  }
+  while (!spi.INTFLAG.bit.TXC) {
+  }
+  (void)spi.DATA.reg; // drain RX
+  (void)spi.DATA.reg;
+  spi.STATUS.bit.BUFOVF = 0;
+  spi.INTFLAG.reg = SERCOM_SPI_INTFLAG_ERROR;
+}
+
 static void set_window(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1) {
   x0 += NV_X_OFFSET;
   x1 += NV_X_OFFSET;
@@ -73,11 +95,10 @@ static void flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px) {
   cs_low();
   set_window((uint16_t)area->x1, (uint16_t)area->y1, (uint16_t)area->x2,
              (uint16_t)area->y2);
-  // Synchronous byte stream (NO DMA — the DMA path fires the unhandled
-  // DMAC_1 IRQ and freezes the MCU; see docs/adr/0002).
-  const uint32_t nbytes = px_count * 2;
-  for (uint32_t i = 0; i < nbytes; i++)
-    SPI.transfer(px[i]);
+  // Synchronous but DRE-paced (NO DMA — the DMA path fires the unhandled
+  // DMAC_1 IRQ and freezes the MCU; see docs/adr/0002). Full frame ~33 ms
+  // at 30 MHz; typical partial flushes are a few ms.
+  spi_write_bulk(px, px_count * 2);
   cs_high();
   SPI.endTransaction();
   lv_display_flush_ready(disp);
@@ -207,6 +228,9 @@ void display_init() {
   delay(120);
 
   SPI.begin();
+  // Re-clock SERCOM2 from 120 MHz so 30 MHz SCK is reachable (48 MHz source
+  // quantizes to 24 MHz max).
+  SPI.setClockSource(SERCOM_CLOCK_SOURCE_FCPU); // 120 MHz (GCLK0)
   SPI.beginTransaction(SPISettings(kSpiHz, MSBFIRST, SPI_MODE0));
   cs_low();
 
