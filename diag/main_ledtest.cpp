@@ -160,7 +160,20 @@ void setup() {
   Wire.begin();
   Wire.setClock(100000);
   Serial1.begin(9600); // L86 NMEA
+
+  // L86 aliveness test: pulse RESET_N (PB31, direct PORT — not in the
+  // Metro variant) low 100 ms, then release to the module's internal
+  // pull-up. A healthy, powered L86 emits a $PMTK011 boot burst within
+  // ~1 s of reset even with zero antenna signal — silence after this
+  // means power/solder/TX-path, not RF.
+  PORT->Group[1].OUTCLR.reg = (1ul << 31);
+  PORT->Group[1].DIRSET.reg = (1ul << 31);
+  delay(100);
+  PORT->Group[1].DIRCLR.reg = (1ul << 31); // release, hi-Z
+  PORT->Group[1].PINCFG[31].reg = 0;
+
   Serial.println("\n=== GNSS Alarm Clock board bring-up (ledtest) ===");
+  Serial.println("L86 RESET_N pulsed - watch for $PMTK011 boot burst");
 
   Wire.beginTransmission(NPM_ADDR);
   if (Wire.endTransmission() == 0)
