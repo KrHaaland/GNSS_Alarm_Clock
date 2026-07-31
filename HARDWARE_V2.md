@@ -18,7 +18,7 @@ USB-C (J1, CC1/CC2 -> PMIC)          Li-ion (J7, 2-pin JST-PH)
                         FB R5 732k / R12 100k -> ~5.0 V, boosts from battery too)
 +3.3V: MCU, display (J4.7), L86 VCC+V_BCKP, RTC VDD, LIS3DH, QSPI flash,
        amp VDD (U1.13), I2C pullups (R6/R7 4.7k)
-+5V:   all 34 LEDs (80R each) + TPA2016 PVCC
++5V:   all 34 LEDs (100R each, R20-R53) + TPA2016 PVCC
 ```
 
 - **The nPM1300's bucks are unused** (VOUT1/VOUT2/SW unconnected): the PMIC
@@ -39,20 +39,103 @@ USB-C (J1, CC1/CC2 -> PMIC)          Li-ion (J7, 2-pin JST-PH)
 
 ## MCU pin map (U18, SAMD51J19A — v2 is still the J19!)
 
-Identical to v1 (`include/pins.h`) except:
+Complete map of all 64 pads of U18, TQFP64. Columns:
+
+- **Pad** — TQFP64 pad number (from the ATSAMD51J19A symbol in
+  `GNSS_Alarm_Clock.kicad_sch`).
+- **PORT** — the SAMD51 PORT pin the symbol assigns to that pad.
+- **v2 net** — net name on the pad in `GNSS_Alarm_Clock.kicad_pcb`. `—` for
+  power/ground; `(unconnected)` for a genuinely floating GPIO.
+- **Function** — what firmware does with it.
+- **Arduino** — pin number in the `adafruit_metro_m4` variant
+  (`variant.cpp`, `g_APinDescription` order). `DIRECT PORT` = the PORT pin
+  is not exposed by that variant, so firmware must touch the PORT
+  registers. `—` = power/ground/reset, no Arduino pin.
+
+| Pad | PORT | v2 net | Function | Arduino |
+|----:|------|--------|----------|---------|
+| 1 | PA00 | XIN32 (X1.2) | 32.768 kHz crystal (XOSC32K, RTC/clock) | DIRECT PORT (crystal, not GPIO) |
+| 2 | PA01 | XOUT32 (X1.1) | 32.768 kHz crystal | DIRECT PORT (crystal, not GPIO) |
+| 3 | PA02 | Analog | Audio DAC out → C27 → TPA2016 INR- | D14 / A0 / DAC0 |
+| 4 | PA03 | +3.3V | VREFA tied to +3.3V (analog reference, not a GPIO) | — |
+| 5 | PB04 | (unconnected) | free | DIRECT PORT |
+| 6 | PB05 | (unconnected) | free | DIRECT PORT |
+| 7 | GNDANA | GND | analog ground | — |
+| 8 | VDDANA | +3.3V | analog supply | — |
+| 9 | PB06 | (unconnected) | free (was RXLED on Metro) | D27 |
+| 10 | PB07 | (unconnected) | free (was USB Host EN on Metro) | D29 |
+| 11 | PB08 | LIS3DH_INT1 | Accelerometer INT1 (U7.11) | D18 / A4 |
+| 12 | PB09 | (unconnected) | free | D19 / A5 |
+| 13 | PA04 | PMIC_GPIO0 | nPM1300 GPIO0 (U3.7); unconfigured reads LOW | D17 / A3 |
+| 14 | PA05 | (unconnected) | free | D15 / A1 / DAC1 |
+| 15 | PA06 | LedsR-S | Right LED section gate → R56 470R → U12 | D16 / A2 |
+| 16 | PA07 | (unconnected) | free | DIRECT PORT |
+| 17 | PA08 | FlashIO0 | QSPI flash DATA0 (U8.5) | D43 |
+| 18 | PA09 | FlashIO1 | QSPI flash DATA1 (U8.2) | D44 |
+| 19 | PA10 | FlashIO2 | QSPI flash DATA2 (U8.3) | D45 |
+| 20 | PA11 | FlashIO3 | QSPI flash DATA3 (U8.7) | D46 |
+| 21 | VDDIOB | +3.3V | I/O supply | — |
+| 22 | GND | GND | ground | — |
+| 23 | PB10 | FlashSCK | QSPI flash SCK (U8.6) | D41 |
+| 24 | PB11 | FlashCS | QSPI flash CS (U8.1) | D42 |
+| 25 | PB12 | BUTTON3 | SW3, active-low, 1M pull-up (R9) | D7 |
+| 26 | PB13 | BUTTON2 | SW2, active-low, 1M pull-up (R8) | D4 |
+| 27 | PB14 | BUTTON1 | 74LVC1G17 (U9.4) output, not a raw switch | D5 |
+| 28 | PB15 | BUTTON4 | SW4, active-low, 1M pull-up (R10) | D6 |
+| 29 | PA12 | SPI_MOSI | Display SPI MOSI (SERCOM2), J4.5 | D26 / MOSI |
+| 30 | PA13 | SPI_SCK | Display SPI SCK (SERCOM2), J4.6 | D25 / SCK |
+| 31 | PA14 | SPI_MISO | SPI MISO (SERCOM2) — not routed to J4 panel | D24 / MISO |
+| 32 | PA15 | (unconnected) | free | DIRECT PORT |
+| 33 | GND | GND | ground | — |
+| 34 | VDDIO | +3.3V | I/O supply | — |
+| 35 | PA16 | DISP_RST | Display reset (active low), J4.4 | D13 |
+| 36 | PA17 | DISP_DC | Display data/command, J4.3 | D12 |
+| 37 | PA18 | DISP_CS | Display chip select (active low), J4.2 | D10 |
+| 38 | PA19 | DISP_BL | Display backlight/aux, J4.1 | D11 |
+| 39 | PB16 | (unconnected) | **buzzer removed on v2** (was SPEAKER) | D3 |
+| 40 | PB17 | AmpShutdown | TPA2016 ~SD (U1.18), 10k pull-up R68, HIGH=on | D2 |
+| 41 | PA20 | LedsB-S | Bottom LED section gate → R54 470R → U11 | D9 |
+| 42 | PA21 | LedsL-S | Left LED section gate → R15 470R → U10 | D8 |
+| 43 | PA22 | McuTX | Serial1 TX (SERCOM3) → L86 RX (U4.1) | D1 |
+| 44 | PA23 | McuRX | Serial1 RX (SERCOM3) ← L86 TX (U4.2) | D0 |
+| 45 | PA24 | USB_N | USB D- (via U2 ESD) | D30 |
+| 46 | PA25 | USB_P | USB D+ (via U2 ESD) | D31 |
+| 47 | GND | GND | ground | — |
+| 48 | VDDIO | +3.3V | I/O supply | — |
+| 49 | PB22 | (unconnected) | free (was NEOPIX on Metro) | D40 |
+| 50 | PB23 | (unconnected) | free | DIRECT PORT |
+| 51 | PA27 | (unconnected) | free (was TXLED on Metro) | D28 |
+| 52 | RESETN | SWD_RST | MCU reset (SW5 + J3 SWD, 100k pull-up R67) | — |
+| 53 | VDDCORE | (core reg) | 1.2 V core LDO decoupling | — |
+| 54 | GND | GND | ground | — |
+| 55 | VSW | (core reg) | core regulator switch node | — |
+| 56 | VDDIO | +3.3V | I/O supply | — |
+| 57 | PA30 | SWD_CLK | SWD clock, J3 (100k pull-up R66) | DIRECT PORT |
+| 58 | PA31 | SWD_IO | SWD data, J3 | DIRECT PORT |
+| 59 | PB30 | SWO | SWO trace, J3.6 | DIRECT PORT |
+| 60 | PB31 | GNSS_Reset | L86 RESET_N (U4.10), active low | DIRECT PORT |
+| 61 | PB00 | GNSS_FOn | L86 FORCE_ON (U4.7) | DIRECT PORT |
+| 62 | PB01 | (unconnected) | **24LC512 removed on v2** (was EEPROM WP) | DIRECT PORT |
+| 63 | PB02 | I2C_SDA | I2C SDA (SERCOM), 4.7k pull-up R6 | D22 / SDA |
+| 64 | PB03 | I2C_SCL | I2C SCL (SERCOM), 4.7k pull-up R7 | D23 / SCL |
+
+Delta vs v1 (`include/pins.h`), verified net-for-net:
 
 | Pin | v1 | v2 |
 |---|---|---|
 | PA04 (A3) | CAPGOOD (LTC3226, HIGH = caps charged) | **PMIC_GPIO0** (nPM1300 GPIO0; unconfigured = reads LOW) |
 | PB16 (D3) | Buzzer MOSFET gate (J5) | **Unconnected — the escalation buzzer does not exist on v2** |
 | PB01 | 24LC512 write protect | Unconnected (EEPROM gone) |
+| PB14 (D5, BUTTON1) | raw switch, active low | driven by 74LVC1G17 (U9), see Buttons |
 | PB30/SWO | — | SWO to SWD connector J3.6 |
 
-Everything else verified identical net-for-net: display PA16-19 + SERCOM2
-SPI (J4 8-pin XH header: BL,CS,DC,RST,MOSI,SCK,3V3,GND — no MISO to the
-panel), buttons PB12-15, LED gates PA21/PA20/PA06, GNSS PA22/PA23 +
-PB00/PB31, DAC PA02 -> C27 -> TPA2016 INR-, QSPI PA08-11+PB10/11 (U8 =
-W25Q128, 16 MB), I2C PB02/PB03.
+Everything else is identical net-for-net: display PA16-19 + SERCOM2 SPI (J4
+8-pin XH header: BL,CS,DC,RST,MOSI,SCK,3V3,GND — no MISO to the panel),
+buttons PB12-15, LED gates PA21/PA20/PA06, GNSS PA22/PA23 + PB00/PB31, DAC
+PA02 → C27 → TPA2016 INR-, QSPI PA08-11 + PB10/11 (U8: the schematic
+*symbol* is the legacy MX25L3233F, but the Value/BOM field says **25Q128**
+= Winbond W25Q128, 16 MB — the part actually fitted, as on assembled v1
+boards; the firmware autodetects via JEDEC ID either way), I2C PB02/PB03.
 
 ## Buttons
 
@@ -69,8 +152,9 @@ W25Q128, 16 MB), I2C PB02/PB03.
 ## LED sections (unchanged counts, better gates)
 
 10 left / 14 bottom / 10 right (LED1-10 / LED11-24 / LED25-34, OR-PL020W,
-80R each from +5V). Gates now have 470R series + 10k pulldowns
-(R15/R57, R54/R55, R56/R58) — v1's floating-gate-at-boot quirk is fixed.
+100R each from +5V, R20-R53). Gates now have 470R series + 10k pulldowns
+(left PA21→R15/R57→U10, bottom PA20→R54/R55→U11, right PA06→R56/R58→U12) —
+v1's floating-gate-at-boot quirk is fixed.
 
 ## I2C bus (100 kHz, pullups 4.7k)
 
