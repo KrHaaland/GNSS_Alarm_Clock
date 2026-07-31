@@ -25,7 +25,8 @@ static const char *const LED_NAMES[3] = {"LEFT (D8/PA21)", "RIGHT (A2/PA06)",
 
 static const char *known_name(uint8_t a) {
   switch (a) {
-  case 0x18: return "LIS3DH accelerometer";
+  case 0x18: return "LIS3DH accelerometer (SA0 low)";
+  case 0x19: return "LIS3DH accelerometer (SA0 floated high)";
   case 0x50: return "24LC512 EEPROM (v1 only — should be absent on v2)";
   case 0x52: return "RV-3028 RTC";
   case 0x58: return "TPA2016 amp";
@@ -87,7 +88,19 @@ static void i2c_scan() {
         Serial.print('0');
       Serial.print(a, HEX);
       Serial.print("  ");
-      Serial.println(known_name(a));
+      Serial.print(known_name(a));
+      if (a == 0x18 || a == 0x19) { // verify it IS a LIS3DH: WHO_AM_I == 0x33
+        Wire.beginTransmission(a);
+        Wire.write(0x0F);
+        if (Wire.endTransmission(false) == 0 &&
+            Wire.requestFrom(a, (uint8_t)1) == 1) {
+          uint8_t who = Wire.read();
+          Serial.print(who == 0x33 ? "  [WHO_AM_I OK]" : "  [WHO_AM_I BAD: 0x");
+          if (who != 0x33)
+            Serial.print(who, HEX), Serial.print("]");
+        }
+      }
+      Serial.println();
       found++;
     }
   }

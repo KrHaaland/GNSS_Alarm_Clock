@@ -72,7 +72,8 @@
 #define I2C_ADDR_RTC 0x52    // RV-3028-C7
 #define I2C_ADDR_AMP 0x58    // TPA2016D2
 #define I2C_ADDR_EEPROM 0x50 // 24LC512 (unused, reserved)
-#define I2C_ADDR_ACCEL 0x18  // LIS3DH (SA0 low)
+#define I2C_ADDR_ACCEL 0x18  // LIS3DH base; SA0 floats -> may sit at 0x19,
+                             // the driver probes both
 
 // --- Pins not present in the Metro M4 variant: direct PORT access ---
 // PORTB = PORT->Group[1]

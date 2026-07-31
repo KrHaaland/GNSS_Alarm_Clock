@@ -17,6 +17,7 @@
 #define MOVE_THRESHOLD 6.0f
 
 static Adafruit_LIS3DH lis;
+static uint8_t s_addr = I2C_ADDR_ACCEL;
 static bool present = false;
 static bool tappedFlag = false;
 static bool movedFlag = false;
@@ -25,7 +26,15 @@ static float s_ax = 0, s_ay = 0, s_az = 0; // previous accel sample (m/s^2)
 static bool s_haveAccel = false;
 
 bool accel_begin() {
-  present = lis.begin(I2C_ADDR_ACCEL);
+  // SA0 floats on both board revisions, so the I2C address is a per-board
+  // coin toss: the v1 prototype landed on 0x18, the first v2 board on 0x19.
+  // Probe both. (Strap SA0 on the next spin.)
+  s_addr = I2C_ADDR_ACCEL;
+  present = lis.begin(s_addr);
+  if (!present) {
+    s_addr = I2C_ADDR_ACCEL + 1; // SA0 floated high
+    present = lis.begin(s_addr);
+  }
   if (!present)
     return false;
   lis.setRange(LIS3DH_RANGE_4_G);
@@ -34,7 +43,7 @@ bool accel_begin() {
   // Enable the high-pass filter on the CLICK path (CTRL_REG2). Without it the
   // static ~1 g on Z sits at the click threshold and the detector fires
   // continuously (observed src=0x64 every poll). HPM=normal(10) | HPCLICK(bit2).
-  Wire.beginTransmission(I2C_ADDR_ACCEL);
+  Wire.beginTransmission(s_addr);
   Wire.write(0x21); // CTRL_REG2
   Wire.write(0x84);
   Wire.endTransmission();
