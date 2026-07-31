@@ -77,6 +77,39 @@ static void npm_raise_vbus_limit() {
   Serial.println(npm_read(NPM_VBUSINSTATUS), HEX);
 }
 
+// --- GNSS listener: is the L86 saying anything at all? ---------------------
+// Counts raw bytes from Serial1 (9600 NMEA) and keeps the last complete
+// sentence. The L86 factory default emits RMC/VTG/GGA/GSA/GSV at 1 Hz with
+// no configuration, so a healthy module shows traffic within seconds.
+static uint32_t gnssChars = 0;
+static char gnssLine[100];
+static uint8_t gnssLen = 0;
+static char gnssLast[100] = "(nothing yet)";
+
+static void gnss_drain() {
+  while (Serial1.available()) {
+    char c = (char)Serial1.read();
+    gnssChars++;
+    if (c == '$')
+      gnssLen = 0;
+    if (c == '\r' || c == '\n') {
+      if (gnssLen > 5) {
+        memcpy(gnssLast, gnssLine, gnssLen);
+        gnssLast[gnssLen] = '\0';
+      }
+      gnssLen = 0;
+    } else if (gnssLen < sizeof(gnssLine) - 1) {
+      gnssLine[gnssLen++] = c;
+    }
+  }
+}
+
+static void delay_drain(uint32_t ms) { // delay without dropping UART bytes
+  uint32_t t0 = millis();
+  while (millis() - t0 < ms)
+    gnss_drain();
+}
+
 static void i2c_scan() {
   Serial.println("--- I2C scan 0x08..0x77 (100 kHz) ---");
   uint8_t found = 0;
@@ -108,6 +141,10 @@ static void i2c_scan() {
     Serial.println("  NO devices ACKed — check SDA/SCL, pullups, 3V3 rail");
   Serial.print("PA04 (CAPGOOD/charger status): ");
   Serial.println(digitalRead(PIN_CAPGOOD) ? "HIGH" : "LOW");
+  Serial.print("GNSS: ");
+  Serial.print(gnssChars);
+  Serial.print(" bytes total, last: ");
+  Serial.println(gnssLast);
 }
 
 void setup() {
@@ -122,6 +159,7 @@ void setup() {
   } // wait briefly for the host to open the port
   Wire.begin();
   Wire.setClock(100000);
+  Serial1.begin(9600); // L86 NMEA
   Serial.println("\n=== GNSS Alarm Clock board bring-up (ledtest) ===");
 
   Wire.beginTransmission(NPM_ADDR);
@@ -144,7 +182,7 @@ void loop() {
         Serial.read();
       ledsArmed = true;
     }
-    delay(1500);
+    delay_drain(1500);
     return;
   }
 
@@ -159,7 +197,7 @@ void loop() {
     digitalWrite(LED_PINS[i], LOW);
     Serial.println("  ...survived");
     Serial.flush();
-    delay(500);
+    delay_drain(500);
   }
-  delay(1000);
+  delay_drain(1000);
 }

@@ -25,6 +25,7 @@
 #include "AudioEngine.h"
 #include "AccelLIS3DH.h"
 #include "Gnss.h"
+#include "PmicNPM1300.h"
 #include "RtcRV3028.h"
 #include "ClockKeeper.h"
 #include "AlarmManager.h"
@@ -135,6 +136,11 @@ void setup() {
   // the RV-3028 RTC intermittently failed to ACK ("RTC missing"). All bus
   // devices (RTC, accel, EEPROM, amp) work fine at 100 kHz.
   Wire.setClock(100000);
+
+  // v2 boards: raise the nPM1300's VBUS current limit from its 100 mA
+  // power-up default BEFORE any real load (LED sections!) can switch on.
+  // No-op on v1 (no PMIC on the bus).
+  pmic_begin();
 
   // Storage first: it brings up TinyUSB MSC, best done early after boot.
   storage_begin();

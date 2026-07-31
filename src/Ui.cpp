@@ -20,6 +20,7 @@
 #include "AudioEngine.h"
 #include "AmpTPA2016.h"
 #include "Leds.h"
+#include "PmicNPM1300.h"
 #include "Display.h"
 #include "RtcRV3028.h"
 #include "Timezone.h"
@@ -37,9 +38,9 @@ LV_FONT_DECLARE(font_clock_100)
 // ---------------------------------------------------------------- state ---
 enum UiScreen : uint8_t {
   SCR_CLOCK, SCR_MENU, SCR_ALARM, SCR_TZ, SCR_DISP, SCR_TUNES, SCR_SYS,
-  SCR_SKY, SCR_RING
+  SCR_SKY, SCR_PMIC, SCR_RING
 };
-#define SCR_COUNT 9
+#define SCR_COUNT 10
 
 static UiScreen s_screen = SCR_CLOCK;
 static lv_group_t *s_group;
@@ -103,7 +104,7 @@ static void stars_twinkle() { // one star flips brightness per UI tick
 }
 
 // Menu
-static lv_obj_t *s_fMenu[10];
+static lv_obj_t *s_fMenu[11];
 static lv_obj_t *s_tapLabel;  // "Tap snooze: On/Off" toggle item label
 static lv_obj_t *s_modeLabel; // "Mode: ..." cycle item label
 
@@ -131,6 +132,10 @@ static uint8_t s_nfTunes;
 // SysInfo
 static lv_obj_t *s_sysLabel;
 static char s_cSys[400];
+
+// Battery / PMIC (v2 boards)
+static lv_obj_t *s_pmicLabel;
+static char s_cPmic[220];
 
 // Sky view (GSV): polar az/elev plot + SNR bars for the strongest sats
 #define SKY_MAX_SATS 24
@@ -579,9 +584,9 @@ static void make_clock() {
 // ------------------------------------------------------------- Menu scr ---
 enum : uint8_t {
   MENU_ALARM1, MENU_ALARM2, MENU_TZ, MENU_DISPLAY, MENU_TUNES, MENU_SYSINFO,
-  MENU_SKY, MENU_TAPSNOOZE, MENU_MODE, MENU_BACK
+  MENU_SKY, MENU_PMIC, MENU_TAPSNOOZE, MENU_MODE, MENU_BACK
 };
-#define MENU_COUNT 10
+#define MENU_COUNT 11
 
 static void menu_refresh_tapsnooze() {
   if (s_tapLabel)
@@ -609,6 +614,7 @@ static void menu_btn_cb(lv_event_t *e) {
   case MENU_TUNES:   load_screen(SCR_TUNES); break;
   case MENU_SYSINFO: load_screen(SCR_SYS); break;
   case MENU_SKY:     load_screen(SCR_SKY); break;
+  case MENU_PMIC:    load_screen(SCR_PMIC); break;
   case MENU_TAPSNOOZE: // toggle in place, stay in the menu
     settings().tapSnooze = !settings().tapSnooze;
     settings_save();
@@ -645,7 +651,7 @@ static void make_menu() {
 
   static const char *const NAMES[MENU_COUNT] = {
       "Alarm 1", "Alarm 2",    "Time & zone", "Disp & sound", "Tunes",
-      "System info", "Sky view", "Tap snooze", "Mode",    "Back"};
+      "System info", "Sky view", "Battery", "Tap snooze", "Mode",    "Back"};
   for (uint8_t i = 0; i < MENU_COUNT; i++)
     s_fMenu[i] = list_add_item(list, NULL, NAMES[i], menu_btn_cb, i);
 
@@ -1113,6 +1119,7 @@ static void refresh_sysinfo(bool force) {
 
   snprintf(b, sizeof(b),
            "Fix %s   Sats %u   HDOP %s\n"
+           "NMEA %lu chars\n"
            "Lat %s   Lon %s\n"
            "Speed %s   Alt %s\n"
            "TZ %s\n"
@@ -1123,7 +1130,8 @@ static void refresh_sysinfo(bool force) {
            "Snoozed %u this week, %lu total\n"
            "Amp %s\n"
            "FW " UI_FW_VERSION " " __DATE__,
-           gnss_has_fix() ? "yes" : "no", (unsigned)gnss_num_sats(), hdop, lat,
+           gnss_has_fix() ? "yes" : "no", (unsigned)gnss_num_sats(), hdop,
+           (unsigned long)gnss_chars_seen(), lat,
            lon, spd, alt, settings().tzName, settings().tzPosix, sign,
            (unsigned long)(ao / 3600), (unsigned long)((ao % 3600) / 60),
            clock_is_dst() ? " DST" : "", age, rtc_present() ? "ok" : "MISSING",
@@ -1145,6 +1153,55 @@ static void make_sysinfo() {
   lv_obj_set_style_text_font(s_sysLabel, &lv_font_montserrat_14, 0);
   lv_label_set_long_mode(s_sysLabel, LV_LABEL_LONG_MODE_WRAP);
   s_cSys[0] = '\0';
+}
+
+// ------------------------------------------------------ Battery/PMIC scr ---
+// v2 boards: live nPM1300 readout — VBUS, battery voltage + rough estimate,
+// charge state, die temperature. v1 boards show a "no PMIC" note.
+static void refresh_pmic(bool force) {
+  char b[220];
+  PmicStatus st;
+  if (!pmic_present()) {
+    snprintf(b, sizeof(b), "No PMIC on this board (v1).\n"
+                           "Power: LTC3226 supercaps, %s",
+             supercaps_ready() ? "ready" : "charging");
+  } else if (!pmic_read_status(st)) {
+    snprintf(b, sizeof(b), "nPM1300: read error");
+  } else {
+    // Rough SoC from voltage, scaled to the configured termination voltage
+    // (linear 3.5 V..vterm). Reads high while charging.
+    int span = (int)pmic_vterm_mv() - 3500;
+    int pct = ((int)st.vbatMv - 3500) * 100 / (span > 0 ? span : 700);
+    if (pct < 0) pct = 0;
+    if (pct > 100) pct = 100;
+    snprintf(b, sizeof(b),
+             "USB power: %s (limit 500 mA%s)\n"
+             "Battery: %u.%02u V  (~%d%% est)\n"
+             "Charger: %s @ %u mA -> %u.%02u V\n"
+             "PMIC die: %d.%d C\n"
+             "Status raw: 0x%02X",
+             st.vbusPresent ? "present" : "absent",
+             pmic_vbus_500() ? "" : ", RAISE FAILED",
+             st.vbatMv / 1000, (st.vbatMv % 1000) / 10, pct,
+             pmic_charge_text(st.chargeStatus), pmic_charge_current_ma(),
+             pmic_vterm_mv() / 1000, (pmic_vterm_mv() % 1000) / 10,
+             st.dieTempCx10 / 10, abs(st.dieTempCx10 % 10), st.chargeStatus);
+  }
+  if (force || strcmp(s_cPmic, b) != 0) {
+    snprintf(s_cPmic, sizeof(s_cPmic), "%s", b);
+    lv_label_set_text(s_pmicLabel, b);
+  }
+}
+
+static void make_pmic() {
+  lv_obj_t *scr = lv_obj_create(NULL);
+  s_scr[SCR_PMIC] = scr;
+  lv_obj_set_style_pad_all(scr, 4, 0);
+  s_pmicLabel = lv_label_create(scr);
+  lv_obj_set_width(s_pmicLabel, LV_PCT(100));
+  lv_obj_set_style_text_font(s_pmicLabel, &lv_font_montserrat_16, 0);
+  lv_label_set_long_mode(s_pmicLabel, LV_LABEL_LONG_MODE_WRAP);
+  s_cPmic[0] = '\0';
 }
 
 // --------------------------------------------------------- Sky view scr ---
@@ -1354,6 +1411,10 @@ static void load_screen(UiScreen id) {
     refresh_sky(true);
     group_set(NULL, 0);
     break;
+  case SCR_PMIC:
+    refresh_pmic(true);
+    group_set(NULL, 0);
+    break;
   case SCR_RING:  group_set(NULL, 0); break;
   }
   s_screen = id;
@@ -1488,6 +1549,7 @@ static void nav_back() {
   case SCR_TUNES:
   case SCR_SYS:
   case SCR_SKY:
+  case SCR_PMIC:
     load_screen(SCR_MENU);
     break;
   default:
@@ -1543,6 +1605,7 @@ void ui_begin() {
   make_tunes();
   make_sysinfo();
   make_sky();
+  make_pmic();
   make_ringing();
 
   // Force every screen's MAIN part to true black now that all are built.
@@ -1684,6 +1747,7 @@ void ui_task() {
   case SCR_TZ:    refresh_tz_info(false); break;
   case SCR_SYS:   refresh_sysinfo(false); break;
   case SCR_SKY:   refresh_sky(false); break;
+  case SCR_PMIC:  refresh_pmic(false); break;
   default:        break;
   }
 }

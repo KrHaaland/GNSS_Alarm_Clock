@@ -1,7 +1,11 @@
 // pins.h — Board pin map for the GNSS Alarm Clock (custom SAMD51J19A board,
 // Adafruit Metro M4 compatible variant).
 //
-// Extracted from HARDWARE/samd51_gps_alarm_clock (KiCad) production netlist.
+// Extracted from the v1 KiCad netlist (now HARDWARE_OLD/). The v2 board
+// (HARDWARE/, see HARDWARE_V2.md for the full reference) keeps this map
+// except: PA04 = nPM1300 GPIO0 (was LTC3226 CAPGOOD), PB16 unconnected
+// (escalation buzzer removed), PB01 unconnected (24LC512 removed), and
+// BUTTON1's physical switch doubles as the PMIC's SHPHLD wake/reset pin.
 // Arduino pin numbers refer to the adafruit_metro_m4 variant.
 //
 //  SAMD51 pin | Net         | Arduino | Function

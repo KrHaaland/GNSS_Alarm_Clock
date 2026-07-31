@@ -1,6 +1,7 @@
 // Leds.cpp — 3 LED sections on low-side MOSFETs (gate HIGH = on), patterns
 // stepped from leds_task().
 #include "Leds.h"
+#include "PmicNPM1300.h"
 #include "pins.h"
 
 static LedPattern pattern = LedPattern::Off;
@@ -87,8 +88,12 @@ void leds_set(bool left, bool bottom, bool right) {
 }
 
 bool supercaps_ready() {
-  // LTC3226 CAPGD is open-drain and releases (pulled HIGH by the external
-  // 10k) once the supercaps reach ~92% of regulation — verify polarity on
-  // hardware.
+  // v2: no supercaps — PA04 is the nPM1300's GPIO0 (unconfigured, reads
+  // LOW). Report ready whenever the PMIC is present and powering us; the
+  // real battery/charge status UI comes with the full v2 power work.
+  if (pmic_present())
+    return true;
+  // v1: LTC3226 CAPGD is open-drain and releases (pulled HIGH by the
+  // external 10k) once the supercaps reach ~92% of regulation.
   return digitalRead(PIN_CAPGOOD) == HIGH;
 }
