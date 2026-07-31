@@ -1,5 +1,6 @@
-// pins.h — Board pin map for the GNSS Alarm Clock (custom SAMD51J19A board,
-// Adafruit Metro M4 compatible variant).
+// pins.h — Board pin map for the GNSS Alarm Clock (custom SAMD51 board,
+// Adafruit Metro M4 compatible variant; v1 = J19A, v2 = J20A — pin-identical
+// in TQFP64).
 //
 // Verified against the v2 KiCad design (HARDWARE/, see HARDWARE_V2.md for the
 // full 64-pad reference) and cross-checked against HARDWARE_OLD/ (v1). The map

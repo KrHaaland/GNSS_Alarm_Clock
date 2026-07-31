@@ -37,7 +37,13 @@ USB-C (J1, CC1/CC2 -> PMIC)          Li-ion (J7, 2-pin JST-PH)
 - L86 **V_BCKP is on +3.3V** (U4.5), *not* VBAT — GNSS still cold-starts
   after a full power-off (v1 HW-review #10 persists on v2).
 
-## MCU pin map (U18, SAMD51J19A — v2 is still the J19!)
+## MCU pin map (U18 — fitted chip is a **SAMD51J20A**)
+
+The schematic symbol says ATSAMD51J19A, but the fitted part reports
+`ATSAMD51x20` via `bossac -i` (1 MB flash / 256 KB RAM) — same stale-symbol
+story as the flash chip; tidy the symbol on the next revision. J19A and
+J20A are pin-identical in TQFP64, so the pin map below applies unchanged.
+Build with `pio run -e metro_m4_j20` (the project default).
 
 Complete map of all 64 pads of U18, TQFP64. Columns:
 
