@@ -7,6 +7,7 @@
 //   D8 = LEDSL-S (left, 10 LEDs), D9 = LEDSB-S (bottom, 14),
 //   A2 = LEDSR-S (right, 10) — low-side MOSFET gates, HIGH = on.
 //   LED anodes hang on ALARMPOWER: that rail must be up for light to show.
+#include <Adafruit_FlashTransport.h>
 #include <Arduino.h>
 #include <Wire.h>
 
@@ -81,6 +82,7 @@ static void npm_raise_vbus_limit() {
 // Counts raw bytes from Serial1 (9600 NMEA) and keeps the last complete
 // sentence. The L86 factory default emits RMC/VTG/GGA/GSA/GSV at 1 Hz with
 // no configuration, so a healthy module shows traffic within seconds.
+static uint8_t s_jedec[4]; // QSPI flash JEDEC ID, probed once in setup()
 static uint32_t gnssChars = 0;
 static char gnssLine[100];
 static uint8_t gnssLen = 0;
@@ -145,6 +147,16 @@ static void i2c_scan() {
   Serial.print(gnssChars);
   Serial.print(" bytes total, last: ");
   Serial.println(gnssLast);
+  Serial.print("QSPI JEDEC: ");
+  for (uint8_t i = 0; i < 3; i++) {
+    if (s_jedec[i] < 0x10)
+      Serial.print('0');
+    Serial.print(s_jedec[i], HEX);
+    Serial.print(' ');
+  }
+  // EF 40 18 = W25Q128JV-SQ (3V, lib OK); EF 60 18 = W25Q128FW (1.8V PART -
+  // WRONG for our 3.3V rail); C2 20 16 = MX25L3233F; 00/FF = no answer.
+  Serial.println();
 }
 
 void setup() {
@@ -174,6 +186,15 @@ void setup() {
 
   Serial.println("\n=== GNSS Alarm Clock board bring-up (ledtest) ===");
   Serial.println("L86 RESET_N pulsed - watch for $PMTK011 boot burst");
+
+  // QSPI flash identity: raw JEDEC-ID (0x9F) probe. Healthy chips:
+  //   EF 40 18 = W25Q128JV-SQ (in the library's builtin list)
+  //   EF 70 18 = W25Q128JV-IM/PM (NOT in the builtin list!)
+  //   C2 20 16 = MX25L3233F (v1 part, our explicit descriptor)
+  //   00/FF    = no answer -> solder/QSPI-path problem
+  static Adafruit_FlashTransport_QSPI qspiTransport;
+  qspiTransport.begin();
+  qspiTransport.readCommand(0x9F, s_jedec, 4);
 
   Wire.beginTransmission(NPM_ADDR);
   if (Wire.endTransmission() == 0)

@@ -132,10 +132,17 @@ Delta vs v1 (`include/pins.h`), verified net-for-net:
 Everything else is identical net-for-net: display PA16-19 + SERCOM2 SPI (J4
 8-pin XH header: BL,CS,DC,RST,MOSI,SCK,3V3,GND — no MISO to the panel),
 buttons PB12-15, LED gates PA21/PA20/PA06, GNSS PA22/PA23 + PB00/PB31, DAC
-PA02 → C27 → TPA2016 INR-, QSPI PA08-11 + PB10/11 (U8: the schematic
-*symbol* is the legacy MX25L3233F, but the Value/BOM field says **25Q128**
-= Winbond W25Q128, 16 MB — the part actually fitted, as on assembled v1
-boards; the firmware autodetects via JEDEC ID either way), I2C PB02/PB03.
+PA02 → C27 → TPA2016 INR-, QSPI PA08-11 + PB10/11, I2C PB02/PB03.
+
+**U8 tune flash — WRONG PART FITTED on the first v2 board:** JEDEC probe
+reads `EF 60 18` = **W25Q128FW**, Winbond's **1.8 V** variant, running out
+of spec on the 3.3 V rail (abs max ~2.5 V). It answers JEDEC but has no
+library profile, so `flash.begin()` fails and the TUNES drive/storage is
+disabled (firmware degrades gracefully). **Replace with W25Q128JVSIQ**
+(3 V, JEDEC `EF 40 18`, in the library's builtin list, same SOIC-8) or an
+MX25L3233F (4 MB, matches the schematic symbol + our explicit descriptor).
+The schematic symbol says MX25L3233F and the BOM Value says "25Q128" —
+tidy both on the next revision.
 
 ## Buttons
 

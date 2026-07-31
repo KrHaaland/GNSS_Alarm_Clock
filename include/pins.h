@@ -40,9 +40,10 @@
 //  PB15       | BUTTON4     |  6      | Button 4 (active low, 1M pullup R10)
 //  PB16       | (unconn.)   |  3      | v2: unconnected (v1: SPEAKER buzzer)
 //  PB17       | AmpShutdown |  2      | TPA2016 ~SD (HIGH = amp on, 10k PU R68)
-//  PA08..11,  | Flash IO    | QSPI    | U8 tune flash: W25Q128 16MB fitted
-//  PB10,PB11  |             |         | (BOM "25Q128"; symbol is the old
-//             |             |         | MX25L3233F — FW autodetects JEDEC)
+//  PA08..11,  | Flash IO    | QSPI    | U8 tune flash. Supported: W25Q128JV
+//  PB10,PB11  |             |         | (3V) or MX25L3233F. NB: first v2
+//             |             |         | board has a 1.8V W25Q128FW — wrong
+//             |             |         | part, storage disabled (HARDWARE_V2)
 //  --- not in the Metro M4 variant: direct PORT access ---
 //  PB00       | GNSS_FOn    |  -      | L86 FORCE_ON (U4.7)
 //  PB31       | GNSS_Reset  |  -      | L86 RESET_N (U4.10), active low

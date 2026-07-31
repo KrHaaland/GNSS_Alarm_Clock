@@ -25,9 +25,14 @@ static Adafruit_SPIFlash flash(&flashTransport);
 static FatVolume fatfs;
 static Adafruit_USBD_MSC usb_msc;
 
-// MX25L3233F is in flash_devices.h but not in the library's default
-// possible_devices[] scan list, so it must be passed to begin() explicitly.
-static const SPIFlash_Device_t tune_flash_device = MX25L3233F;
+// Both 3V parts this footprint may carry (schematic symbol says MX25L3233F,
+// assembled boards have had W25Q128JV). MX25L3233F is in flash_devices.h but
+// not in the library's default scan list, so pass both explicitly. NB: the
+// 1.8V W25Q128FW (JEDEC EF 60 18) is deliberately NOT here — it is out of
+// spec on the 3.3V rail (see HARDWARE_V2.md); begin() fails and storage
+// stays disabled rather than stressing a mis-fitted chip.
+static const SPIFlash_Device_t tune_flash_devices[] = {MX25L3233F,
+                                                       W25Q128JV_SQ};
 
 static bool fs_mounted = false;
 static volatile bool fs_changed = false;   // host wrote, remount pending
@@ -134,7 +139,7 @@ static void write_readme(void) {
 }
 
 bool storage_begin(void) {
-  if (!flash.begin(&tune_flash_device, 1))
+  if (!flash.begin(tune_flash_devices, 2))
     return false;
 
   // SCSI INQUIRY identity (what Windows shows for the disk device):
@@ -180,7 +185,11 @@ uint8_t storage_list_tunes(char names[][32], uint8_t maxNames) {
   uint8_t count = 0;
   FatFile file;
   char name[64];
-  while (count < maxNames && file.openNext(&root, O_RDONLY)) {
+  // Hard iteration cap: a FAT12 root dir holds at most 512 entries, but a
+  // corrupt/unstably-read directory chain (flaky QSPI solder, torn write)
+  // can loop forever in openNext() and freeze the UI on the Tunes screen.
+  uint16_t iter = 0;
+  while (count < maxNames && iter++ < 512 && file.openNext(&root, O_RDONLY)) {
     bool skip = file.isDir() || file.isHidden() || file.isSystem();
     size_t len = file.getName(name, sizeof(name));
     file.close();

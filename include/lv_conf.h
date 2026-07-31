@@ -69,7 +69,7 @@
 
 #if LV_USE_STDLIB_MALLOC == LV_STDLIB_BUILTIN
     /** Size of memory available for `lv_malloc()` in bytes (>= 2kB) */
-    #define LV_MEM_SIZE (64 * 1024U)          /**< [bytes] (48K ran dry when the Sky-view screen's ~50 objects were added — LVGL then hangs in LV_ASSERT_MALLOC with a black panel) */
+    #define LV_MEM_SIZE (80 * 1024U)          /**< [bytes] LVGL hangs in LV_ASSERT_MALLOC when this runs dry (black/frozen panel): 48K died on the Sky-view screen's ~50 objects, 64K died when the Tunes list rebuilt on top of Sky+stars+Battery. Keep headroom. */
 
     /** Size of the memory expand for `lv_malloc()` in bytes */
     #define LV_MEM_POOL_EXPAND_SIZE 0
