@@ -150,6 +150,18 @@ MX25L3233F (4 MB, matches the schematic symbol + our explicit descriptor).
 The schematic symbol says MX25L3233F and the BOM Value says "25Q128" —
 tidy both on the next revision.
 
+## Display module gotcha: BL strap polarity
+
+Off-the-shelf NV3007 modules differ in how the backlight enable is strapped
+on the module: with a **pull-up**, a floating DISP_BL (PA19 — floats through
+the whole UF2-bootloader phase) means the backlight burns at FULL power
+inside the PMIC's 100 mA power-up window → a battery-less board boot-loops
+before any code can help (and shows a ghost of the previous frame, since
+the panel GRAM survives the shallow brownouts). Diagnosed by tying BL to
+GND, which let it boot. Modules with a **pull-down** are safe. Firmware
+drives PA19 low as its first instruction and soft-starts the backlight,
+which closes the app-phase window but cannot reach the bootloader phase.
+
 ## Buttons
 
 - SW2-SW4 = BUTTON2-4, active low, 1M pullups (as v1).

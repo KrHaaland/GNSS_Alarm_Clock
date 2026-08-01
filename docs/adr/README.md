@@ -18,3 +18,5 @@ the decision, and its consequences. Newest last. Format: lightweight MADR.
 | [0011](0011-display-panel-select-and-subset-font.md) | Panel select + subset clock font | Accepted |
 | [0012](0012-async-dma-display-flush.md) | Async DMA display flush + double buffering | Accepted |
 | [0013](0013-dma-paced-dac-audio.md) | DMA-paced DAC audio playback | Accepted |
+| [0014](0014-npm1300-power-management.md) | v2 power management: nPM1300 strategy | Accepted |
+| [0015](0015-j20-default-swd-flashing.md) | SAMD51J20A default target; SWD-first flashing | Accepted |

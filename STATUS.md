@@ -1,8 +1,10 @@
 # Project Status Report — GNSS Alarm Clock
 
-_Last updated: 2026-07-21_
+_Last updated: 2026-08-01_
 
-Custom **SAMD51J19A** board (Adafruit Metro M4 compatible). Firmware:
+Custom **SAMD51** board (Adafruit Metro M4 compatible) — the **v2 board
+(SAMD51J20A, nPM1300 PMIC, Li-ion, USB-C) is now the primary target**; the
+v1 prototype (J19A, supercaps) remains supported. Firmware:
 PlatformIO + Arduino + **LVGL 9.5**. This report captures the current state,
 what changed most recently, and the open items — hardware and firmware.
 
@@ -17,19 +19,48 @@ on the RTC (below); it does not stop the clock from working off GNSS.
 | Subsystem | State | Notes |
 |---|---|---|
 | Display (NV3007) | ✅ Working | 428×142 landscape, vendor-page init, Y+14 offset, 30 MHz mode 0 |
-| GNSS time (L86) | ✅ Working | RMC+GGA @1 Hz, cold-start year-2080 guard |
+| GNSS time (L86) | 🔴 Module dying | Works only when heated (4-5 proto cycles); replacement ordered. FW verified OK |
+| Power/charging (v2) | ✅ Working | nPM1300: 500 mA budget, 200 mA charge → 4.10 V, SoC in UI (ADR-0014) |
 | Timezone + DST | ✅ Working | Offline coord→POSIX-TZ, persisted to flash |
 | RTC (RV-3028) | ✅ Working | U5 hand-soldered onto the prototype; ACKs at 0x52, settings EEPROM verified |
 | Alarms + snooze | ✅ Implemented | Verify ring/re-ring/tap on hardware (§4) |
 | Audio (DAC→TPA2016) | ✅ Working | WAV + 3 melodies, digital + amp volume |
 | LEDs (3 sections) | ✅ Working | Chase/blink from supercap rail |
-| Tunes over USB | ✅ Working | QSPI flash as `TUNES` drive (16 MB) |
+| Tunes over USB | ⏳ Awaiting part | v2's U8 is a 1.8 V W25Q128FW (wrong variant) — storage disabled until a JVSIQ is fitted; melodies work |
 | Settings persistence | ✅ Working | RV-3028 user EEPROM (39 B packed) — survives reboot **and reflash** (verified) |
 | UI (9 screens) | ✅ Working | 4-button nav, true-black theme, starry-night option |
 
 ---
 
-## 2. Recent changes (this session)
+## 2. Recent changes
+
+**v2 board bring-up (2026-07-22 → 08-01)** — full session log in
+`docs/sessions/`. Every subsystem verified on the new board:
+- **MCU is a SAMD51J20A** (verified `bossac -i`; schematic symbol says J19A)
+  → `metro_m4_j20` is the default build (ADR-0015). Flash 42 %, RAM 60 %.
+- **nPM1300 power** (ADR-0014): VBUS limit raised to 500 mA at every boot
+  (100 mA OTP default brownout-looped the LED test on a battery-less
+  board), charger enabled at 200 mA → 4.10 V, boot-window load clamping
+  (L86 reset, amp off, backlight low + soft-start ramp).
+- **Battery UI**: SoC% + level-mirroring battery icon + charge bolt on the
+  clock face; "Battery" menu screen with live VBAT/state/die-temp.
+- **Bench findings, all diagnosed on-board**: LIS3DH cold joint (answers at
+  0x19 — SA0 strap not effective; FW probes both addresses), L86 cold VCC
+  joint (reflowed; **module now failing after 4-5 prototype cycles — trickle
+  of NMEA unless heated; replacement ordered**), U8 flash is a 1.8 V
+  W25Q128FW (wrong variant, storage disabled until a JVSIQ arrives),
+  display module straps BL with a pull-up (full backlight through the
+  bootloader phase → battery-less bootloop; replacement display has a
+  pull-down), one aborted bossac write left a half-flashed app that
+  enumerated but "saw no satellites" — SWD via Atmel-ICE is now the primary
+  flash path (ADR-0015).
+- **ledtest diag env**: I2C scan + WHO_AM_I, LED sections, GNSS listener
+  with reset-pulse aliveness test, QSPI JEDEC probe, nPM1300 unlock.
+- Earlier in the window: async DMA display flush (ADR-0012), DMA-paced
+  audio (ADR-0013), Sky view (GSV), starry night, Tunes-freeze fix
+  (LVGL pool 80 K).
+
+## 2b. Older changes (v1 era)
 
 **Display bring-up (SH1122 → ST7789)** — committed:
 - New `DisplayST7789` driver (RGB565, LVGL 9). Panel is a centered sub-window of
@@ -190,25 +221,32 @@ See [`HARDWARE_REVIEW.md`](HARDWARE_REVIEW.md). Most relevant:
 
 ---
 
-## 3½. Hardware v2 (planned)
+## 3½. Hardware v2 — status (built and running!)
 
-Next board revision, decided so far:
-- **MCU: SAMD51J20A** (1 MB flash / 256 KB RAM) — build targets already in
-  place (`metro_m4_j20`, `sim_j20`).
-- **Li-ion battery replaces the supercaps** — needs USB charging, which is why
-  the firmware now declares **MaxPower 500 mA** (done, verified).
+The v2 board is assembled and every subsystem is bench-verified (see
+`HARDWARE_V2.md` for the full firmware-facing reference). Realized:
+SAMD51J20A, nPM1300 (charger 200 mA → 4.10 V, power path, USB-C CC),
+LM3671 3.3 V + TPS61023 5 V boost (both battery-capable), battery-backed
+RTC, battery icon/SoC in the UI. The escalation buzzer was dropped in
+hardware (PB16 unconnected).
 
-Firmware consequences to prepare when the v2 schematic lands:
-- Charger with **power-path/load-sharing** recommended (e.g. BQ24074/MCP73871
-  class) so the system runs while charging within the USB budget.
-- Replace `CAPGOOD` logic with charger **CHG/PGOOD** status inputs; battery
-  icon/percentage in the UI (ADC divider or fuel gauge).
-- `ALARMPOWER` (LEDs + buzzer + amp) moves to the battery rail — revisit
-  escalation/brightness current budget.
-- **RTC VBACKUP and L86 `V_BCKP` from the battery** — fixes HW-review #10
-  (GNSS cold-start) and makes timekeeping holdover robust in one stroke.
-- Low-battery behavior (dim/limit alarm? shutdown threshold) — TBD.
-- A v2 **uf2-samdx1 bootloader** build (J20 + our pid.codes USB identity).
+**Waiting on parts:**
+- **L86 GNSS module** — the veteran module (4-5 prototype cycles) now only
+  talks when heated; replacement ordered.
+- **W25Q128JVSIQ (3 V)** — fitted U8 is the 1.8 V FW variant; storage/TUNES
+  disabled until swapped. FW supports the JVSIQ out of the box.
+- **Display with BL pull-down** — current module's pull-up burns the
+  backlight through the bootloader phase (battery-less bootloop).
+
+**Still open (firmware):**
+- Custom **uf2-samdx1 bootloader**: pid.codes identity + early nPM1300
+  ILIM write (kills the last battery-less-boot window, ADR-0014/0015).
+- Escalation stage on v2: gate the (nonexistent) buzzer on
+  `pmic_present()`, or substitute max-volume + LED blitz.
+- Low-battery behavior (dim / limit alarms / shutdown threshold) — TBD.
+- L86 V_BCKP still on 3.3 V (not battery): GNSS cold-starts after power
+  loss — next board spin, along with an L86 load switch and the U8/U18
+  schematic symbol tidy-up.
 
 ## 4. Open FIRMWARE items
 

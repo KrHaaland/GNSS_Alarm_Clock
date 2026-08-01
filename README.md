@@ -1,7 +1,16 @@
 # GNSS Alarm Clock — Firmware
 
-Firmware for the custom **SAMD51J19A** alarm-clock board (Adafruit Metro M4
-compatible), designed in `HARDWARE/samd51_gps_alarm_clock` (KiCad).
+Firmware for the custom **SAMD51** alarm-clock board (Adafruit Metro M4
+compatible), designed in `HARDWARE/` (KiCad). Two board revisions share one
+firmware:
+
+- **v2 (current)** — SAMD51J20A, **nPM1300 PMIC** with Li-ion charging and
+  USB-C, LM3671 3.3 V + TPS61023 5 V boost, battery-backed RTC. See
+  [`HARDWARE_V2.md`](HARDWARE_V2.md) and [ADR-0014](docs/adr/0014-npm1300-power-management.md)/[0015](docs/adr/0015-j20-default-swd-flashing.md).
+  Default build: `metro_m4_j20`.
+- **v1 (prototype)** — SAMD51J19A, LTC3226 + supercaps (design in
+  `HARDWARE_OLD/`). Build: `adafruit_metro_m4`. The firmware detects the
+  PMIC at runtime and degrades gracefully either way.
 
 Time is set automatically from GNSS, the timezone (with DST) is derived offline
 from the GNSS coordinates and saved to flash so it stays correct indoors, and
@@ -19,6 +28,7 @@ a 428×142 color TFT driven by four buttons.
 - **[User guide](docs/USER_GUIDE.md)** — buttons, menu, alarms, modes, tunes
 - **[Architecture decisions](docs/adr/)** — why things are the way they are
 - **[STATUS.md](STATUS.md)** — living status report · **[HARDWARE_REVIEW.md](HARDWARE_REVIEW.md)** — board findings
+- **[HARDWARE_V2.md](HARDWARE_V2.md)** — v2 board reference (pinout, power tree, gotchas) · **[docs/sessions/](docs/sessions/)** — bench-session logs
 - CI: GitHub Actions builds all firmware targets + runs the native test suite on every push
 
 ## What it does
@@ -27,8 +37,8 @@ a 428×142 color TFT driven by four buttons.
   plus GSV satellites-in-view every 5 s for the Sky-view screen, TinyGPS++ +
   a small in-house GSV parser) provides UTC. The clock is a `millis()`-anchored UTC counter
   disciplined by GNSS (re-syncs hourly / on ≥2 s drift) and backed by the
-  **RV-3028-C7** RTC (I²C 0x52), whose VBACKUP sits on the supercap rail so it
-  holds time through power loss. On boot the clock starts from the RTC
+  **RV-3028-C7** RTC (I²C 0x52), whose VBACKUP sits on the battery (v2; the
+  v1 prototype used the supercap rail) so it holds time through power loss. On boot the clock starts from the RTC
   immediately and refines from GNSS when a fix is available. A cold-start guard
   rejects the L86's free-running "year-2080" date so garbage can't be written
   into the backup RTC.
