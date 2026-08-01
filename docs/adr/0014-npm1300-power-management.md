@@ -38,8 +38,10 @@ every VBUS plug) and its charger **disabled** until the host configures it.
    the clock lives on the charger; undercharging markedly extends cell
    life), NTC type 10k. A **die-temperature thermostat** pauses charging
    at 80 °C and resumes at 70 °C (chip default 110/100; bench-tuned
-   upward from 55/45 as charge rates grew — the case stays barely warm
-   at 800 mA, so the die headroom is real) — tight enough that the
+   upward from 55/45 as charge rates grew). **Measured equilibrium:
+   800 mA continuous with the die stable at ~75 °C** — inside the
+   70–80 window by design, so charging never duty-cycles in practice
+   and the case stays comfortably warm — tight enough that the
    enclosure stays cool and the charge rate self-regulates. The charge
    setpoint itself follows the detected budget: 400 mA on 500 mA
    sources, 800 mA on 1.5/3 A sources (0.13C/0.27C on the LG HG2). Charger enabled
