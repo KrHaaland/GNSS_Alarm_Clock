@@ -14,6 +14,7 @@
 struct PmicStatus {
   bool vbusPresent;    // USB power attached
   uint16_t vbatMv;     // battery voltage, mV
+  int16_t ibatMa;      // battery current, mA: + charging, - discharging
   int16_t dieTempCx10; // PMIC die temperature, 0.1 C units
   uint8_t chargeStatus; // raw BCHGCHARGESTATUS (see pmic_charge_text)
 };

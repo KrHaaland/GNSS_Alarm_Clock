@@ -1203,12 +1203,16 @@ static void refresh_pmic(bool force) {
     snprintf(b, sizeof(b),
              "USB power: %s (limit 500 mA%s)\n"
              "Battery: %u.%02u V  (~%d%% est)\n"
+             "Current: %+d mA (%s)\n"
              "Charger: %s @ %u mA -> %u.%02u V\n"
              "PMIC die: %d.%d C\n"
              "Status raw: 0x%02X",
              st.vbusPresent ? "present" : "absent",
              pmic_vbus_500() ? "" : ", RAISE FAILED",
-             st.vbatMv / 1000, (st.vbatMv % 1000) / 10, pct,
+             st.vbatMv / 1000, (st.vbatMv % 1000) / 10, pct, st.ibatMa,
+             st.ibatMa > 0   ? "into battery"
+             : st.ibatMa < 0 ? "from battery"
+                             : "idle",
              pmic_charge_text(st.chargeStatus), pmic_charge_current_ma(),
              pmic_vterm_mv() / 1000, (pmic_vterm_mv() % 1000) / 10,
              st.dieTempCx10 / 10, abs(st.dieTempCx10 % 10), st.chargeStatus);

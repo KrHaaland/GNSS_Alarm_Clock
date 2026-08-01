@@ -17,6 +17,10 @@
 #define NPM_BCHGISETMSB 0x0308     // charge current index = mA/2; MSB = idx/2
 #define NPM_BCHGISETLSB 0x0309     // LSB = idx & 1
 #define NPM_BCHGVTERM 0x030C       // 4 = 4.00 V .. 13 = 4.45 V (50 mV steps)
+#define NPM_DIETEMPSTOP 0x0318     // die-temp charge throttle, 10-bit pair
+#define NPM_DIETEMPSTOPLSB 0x0319
+#define NPM_DIETEMPRESUME 0x031A
+#define NPM_DIETEMPRESUMELSB 0x031B
 #define NPM_BCHGCHARGESTATUS 0x0334
 // The board's NTC pin has a fixed 10 kOhm to GND (no thermistor in the
 // battery): the charger reads a constant ~25 C, i.e. temperature limits are
@@ -26,17 +30,39 @@
 // ADC group (base 0x05)
 #define NPM_TASKVBATMEASURE 0x0500
 #define NPM_TASKTEMPMEASURE 0x0502 // die temperature
+#define NPM_ADCIBATSTATUS 0x0510   // 0x04 discharge, 0x0C/0x0D/0x0F charging
 #define NPM_ADCVBATRESULTMSB 0x0511
 #define NPM_ADCTEMPRESULTMSB 0x0513
 #define NPM_ADCGP0RESULTLSBS 0x0515 // 2-bit LSBs: VBAT [1:0], TEMP [5:4]
+#define NPM_ADCIBATRESULTMSB 0x0518
+#define NPM_ADCGP1RESULTLSBS 0x0519 // 2-bit LSBs: IBAT [5:4]
+#define NPM_ADCIBATMEASEN 0x0524    // 1 = measure IBAT with every VBAT task
 
-// Charge config: 200 mA into the 2000-3000 mAh cell (0.07-0.1C, gentle) and
-// well inside the user's hard rule that the WHOLE device stays under the
-// 500 mA USB budget — which the VBUS input limit enforces in hardware
-// regardless. Termination 4.10 V (user choice: the clock lives on the
-// charger, and stopping below 4.2 V markedly extends cell life at the cost
-// of some capacity).
-#define NPM_CHARGE_MA 200
+// IBAT full-scale references (per the nPM1300 spec / Zephyr driver):
+// charging = charge setpoint * 1.25; discharging = discharge limit * 1.12.
+// We never touch the discharge limiter, so the chip default (1000 mA) applies.
+#define NPM_DISCHG_LIMIT_MA 1000
+
+// Charge config: 400 mA setpoint into the 2000-3000 mAh cell (0.13-0.2C,
+// still gentle). The setpoint is a MAXIMUM: the nPM1300 prioritizes system
+// load in hardware and gives charging whatever remains of the 500 mA VBUS
+// budget (measured system draw ~150-175 mA -> real charge ~325-350 mA,
+// dipping to zero/supplement during alarm peaks). Termination 4.10 V (user
+// choice: the clock lives on the charger, and stopping below 4.2 V markedly
+// extends cell life at the cost of some capacity).
+#define NPM_CHARGE_MA 400
+
+// Die-temp charge throttle (linear charger burns (VSYS-VBAT)*I in the die):
+// pause charging at 55 C, resume at 45 C (chip defaults: 110/100). NOTE:
+// deliberately tight — at the 400 mA setpoint the die can reach ~50-60 C,
+// so charging may duty-cycle between these thresholds in normal use. That
+// is the intent: a thermostat that keeps the enclosure cool and lets the
+// charge rate self-regulate ("paused (hot)" + die temp are visible live on
+// the Battery screen). Same encoding as the die-temp ADC readout:
+// K = (394670 - T_mdegC) / 792.6.
+#define NPM_DIETEMP_STOP_C 55
+#define NPM_DIETEMP_RESUME_C 45
+#define NPM_DIETEMP_CODE(tC) ((uint16_t)((394670L - (tC)*1000L) * 10 / 7926))
 #define NPM_VTERM_MV 4100
 // BCHGVTERM: index 4 = 4.00 V, 50 mV steps (4.10 V -> 6)
 #define NPM_VTERM_IDX (4 + (NPM_VTERM_MV - 4000) / 50)
@@ -81,7 +107,14 @@ void pmic_begin() {
   npm_write(NPM_BCHGISETMSB, (uint8_t)(idx / 2));
   npm_write(NPM_BCHGISETLSB, (uint8_t)(idx & 1));
   npm_write(NPM_BCHGVTERM, NPM_VTERM_IDX);
+  uint16_t kStop = NPM_DIETEMP_CODE(NPM_DIETEMP_STOP_C);
+  uint16_t kResume = NPM_DIETEMP_CODE(NPM_DIETEMP_RESUME_C);
+  npm_write(NPM_DIETEMPSTOP, (uint8_t)(kStop >> 2));
+  npm_write(NPM_DIETEMPSTOPLSB, (uint8_t)(kStop & 3));
+  npm_write(NPM_DIETEMPRESUME, (uint8_t)(kResume >> 2));
+  npm_write(NPM_DIETEMPRESUMELSB, (uint8_t)(kResume & 3));
   npm_write(NPM_BCHGENABLESET, 1);
+  npm_write(NPM_ADCIBATMEASEN, 1); // piggyback IBAT on every VBAT measurement
 }
 
 bool pmic_present() { return s_present; }
@@ -109,9 +142,13 @@ bool pmic_read_status(PmicStatus &out) {
   int vbatMsb = npm_read(NPM_ADCVBATRESULTMSB);
   int tempMsb = npm_read(NPM_ADCTEMPRESULTMSB);
   int lsbs = npm_read(NPM_ADCGP0RESULTLSBS);
+  int ibatStat = npm_read(NPM_ADCIBATSTATUS);
+  int ibatMsb = npm_read(NPM_ADCIBATRESULTMSB);
+  int lsbsB = npm_read(NPM_ADCGP1RESULTLSBS);
   int chg = npm_read(NPM_BCHGCHARGESTATUS);
   int vbus = npm_read(NPM_VBUSINSTATUS);
-  if (vbatMsb < 0 || tempMsb < 0 || lsbs < 0 || chg < 0 || vbus < 0)
+  if (vbatMsb < 0 || tempMsb < 0 || lsbs < 0 || ibatStat < 0 || ibatMsb < 0 ||
+      lsbsB < 0 || chg < 0 || vbus < 0)
     return false;
 
   uint16_t vbatCode = (uint16_t)((vbatMsb << 2) | (lsbs & 0x03));
@@ -120,6 +157,25 @@ bool pmic_read_status(PmicStatus &out) {
   // die temp: mdegC = 394670 - code * 792.6
   out.dieTempCx10 =
       (int16_t)((394670 - ((int32_t)tempCode * 7926) / 10) / 100);
+
+  // Battery current: 10-bit code against a status-dependent full scale.
+  // Positive = into the battery (charging), negative = out (discharging).
+  int32_t ibatCode = (ibatMsb << 2) | ((lsbsB >> 4) & 0x03);
+  switch (ibatStat & 0x0F) {
+  case 0x0C: // trickle
+  case 0x0D: // cool (temperature-limited)
+  case 0x0F: // constant current/voltage
+    out.ibatMa = (int16_t)((ibatCode * (NPM_CHARGE_MA * 125L / 100)) / 1023);
+    break;
+  case 0x04: // discharging
+    out.ibatMa =
+        (int16_t)(-(ibatCode * (NPM_DISCHG_LIMIT_MA * 112L / 100)) / 1023);
+    break;
+  default:
+    out.ibatMa = 0;
+    break;
+  }
+
   out.chargeStatus = (uint8_t)chg;
   out.vbusPresent = (vbus & 0x01) != 0;
   return true;
