@@ -15,11 +15,15 @@ The PMIC powers up with a **100 mA VBUS limit** (OTP default, resets on
 every VBUS plug) and its charger **disabled** until the host configures it.
 
 ## Decision
-1. **`pmic_begin()` runs at every boot, as early as possible**: raises the
-   VBUS input limit to 500 mA (`VBUSINILIM0=5` + `TASKUPDATEILIMSW`), with
-   read-back verification. 500 mA is the hard port-protection budget; the
-   PMIC enforces it in hardware, and supplement mode lets the battery cover
-   bursts beyond it.
+1. **`pmic_begin()` runs at every boot, as early as possible**, and sets
+   the VBUS input limit from the **USB-C CC advertisement**
+   (USBCDETECTSTATUS): Default USB / A-to-C cable / PC port → **500 mA**
+   (the hard port-protection rule); a detected 1.5/3 A source → **1500 mA**.
+   Read-back verified. The PMIC enforces the limit in hardware and
+   supplement mode lets the battery cover bursts beyond it. Because the
+   limit resets to 100 mA on every VBUS attach, the PMIC's **GPIO0 (wired
+   to PA04) is configured as an IRQ output** for VBUS events; the main loop
+   services it and re-applies the CC-based limit immediately on replug.
 2. **Boot-window load clamping**: before the I2C transactions (~2–3 ms),
    firmware's first instructions clamp every reachable load — L86 held in
    reset (it hangs directly on 3.3 V, no enable pin, bursts ~100 mA
@@ -27,11 +31,16 @@ every VBUS plug) and its charger **disabled** until the host configures it.
    backlight driven low (some modules strap BL with a pull-up: a floating
    PA19 means full backlight through the whole bootloader phase). The
    backlight then **soft-starts** (PWM ramp ~100 ms) in display_init().
-3. **Charger config**: 200 mA charge current (0.07–0.1C — gentle, and
-   charging + system stay inside the 500 mA budget), terminate at
-   **4.10 V** (user choice: the clock lives on the charger; undercharging
-   markedly extends cell life), NTC type 10k. Charger enabled only after
-   current + termination are set.
+3. **Charger config**: 400 mA charge *setpoint* — the PMIC prioritizes
+   system load in hardware and gives charging whatever remains of the
+   input budget (~325–350 mA at the measured ~165 mA system draw), so the
+   setpoint is a max, not a demand. Terminate at **4.10 V** (user choice:
+   the clock lives on the charger; undercharging markedly extends cell
+   life), NTC type 10k. A **die-temperature thermostat** pauses charging
+   at 55 °C and resumes at 45 °C (chip default 110/100) — deliberately
+   tight so the enclosure stays cool and the charge rate self-regulates;
+   thresholds under bench observation, may move ~+10 °C. Charger enabled
+   only after current + termination + thresholds are set.
 4. **SoC estimate**: linear voltage map 3.5 V → V_term via
    `pmic_soc_percent()` — one shared implementation for the clock-face
    battery row and the Battery screen. Reads high while charging; good
@@ -50,6 +59,19 @@ every VBUS plug) and its charger **disabled** until the host configures it.
    PMIC reads the CC advertisement autonomously, before any code); bake the
    ILIM write into the planned custom uf2-samdx1 bootloader; add inrush
    limiting/load switches on the next board spin.
+
+6. **Low-battery policy (ship mode)**: on battery only — never on a
+   charger, and never while an alarm is Ringing/Snoozed (the LED+speaker
+   load sags VBAT 50–100 mV and would false-trigger; waking someone beats
+   the last percent of battery) — three consecutive 10 s readings under
+   3.40 V enter ship mode (<500 nA, battery cut from VSYS, RTC keeps time
+   on VBAT). Woken below 3.45 V without a charger: fullscreen
+   "LOW BATTERY" for 4 s, then back to ship mode. A menu "Shutdown" item
+   (OK-confirmed, refused on USB power) enters the same state manually.
+   Wake is BUTTON1 (=SHPHLD) or USB attach.
+7. **Battery telemetry**: IBAT measurement rides on every VBAT ADC round;
+   the Battery screen shows signed current, the active input limit, charge
+   state and die temperature — the bench multimeter lives on-screen.
 
 ## Consequences
 - Any future code that adds a load at boot must either run after
