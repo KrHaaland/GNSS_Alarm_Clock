@@ -37,9 +37,9 @@ every VBUS plug) and its charger **disabled** until the host configures it.
    setpoint is a max, not a demand. Terminate at **4.10 V** (user choice:
    the clock lives on the charger; undercharging markedly extends cell
    life), NTC type 10k. A **die-temperature thermostat** pauses charging
-   at 55 °C and resumes at 45 °C (chip default 110/100) — deliberately
-   tight so the enclosure stays cool and the charge rate self-regulates;
-   thresholds under bench observation, may move ~+10 °C. Charger enabled
+   at 65 °C and resumes at 55 °C (chip default 110/100; tuned up from a
+   first 55/45 try on the bench) — tight enough that the enclosure stays
+   cool and the charge rate self-regulates. Charger enabled
    only after current + termination + thresholds are set.
 4. **SoC estimate**: linear voltage map 3.5 V → V_term via
    `pmic_soc_percent()` — one shared implementation for the clock-face

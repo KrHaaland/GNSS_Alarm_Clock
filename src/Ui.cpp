@@ -38,9 +38,9 @@ LV_FONT_DECLARE(font_clock_100)
 // ---------------------------------------------------------------- state ---
 enum UiScreen : uint8_t {
   SCR_CLOCK, SCR_MENU, SCR_ALARM, SCR_TZ, SCR_DISP, SCR_TUNES, SCR_SYS,
-  SCR_SKY, SCR_PMIC, SCR_RING
+  SCR_SKY, SCR_PMIC, SCR_LIGHTS, SCR_RING
 };
-#define SCR_COUNT 10
+#define SCR_COUNT 11
 
 static UiScreen s_screen = SCR_CLOCK;
 static lv_group_t *s_group;
@@ -104,7 +104,7 @@ static void stars_twinkle() { // one star flips brightness per UI tick
 }
 
 // Menu
-static lv_obj_t *s_fMenu[12];
+static lv_obj_t *s_fMenu[13];
 static bool s_shutdownArmed; // Shutdown chosen; next B4 while msgbox = confirm
 static lv_obj_t *s_tapLabel;  // "Tap snooze: On/Off" toggle item label
 static lv_obj_t *s_modeLabel; // "Mode: ..." cycle item label
@@ -133,6 +133,11 @@ static uint8_t s_nfTunes;
 // SysInfo
 static lv_obj_t *s_sysLabel;
 static char s_cSys[400];
+
+// Lights (manual LED-section switches, power-draw testing)
+static lv_obj_t *s_liSw[3];
+static lv_obj_t *s_fLights[3];
+static bool s_liState[3]; // persists while navigating (e.g. to Battery)
 
 // Battery / PMIC (v2 boards)
 static lv_obj_t *s_pmicLabel;
@@ -651,9 +656,10 @@ static void shutdown_request() {
 // ------------------------------------------------------------- Menu scr ---
 enum : uint8_t {
   MENU_ALARM1, MENU_ALARM2, MENU_TZ, MENU_DISPLAY, MENU_TUNES, MENU_SYSINFO,
-  MENU_SKY, MENU_PMIC, MENU_TAPSNOOZE, MENU_MODE, MENU_SHUTDOWN, MENU_BACK
+  MENU_SKY, MENU_PMIC, MENU_LIGHTS, MENU_TAPSNOOZE, MENU_MODE, MENU_SHUTDOWN,
+  MENU_BACK
 };
-#define MENU_COUNT 12
+#define MENU_COUNT 13
 
 static void menu_refresh_tapsnooze() {
   if (s_tapLabel)
@@ -682,6 +688,7 @@ static void menu_btn_cb(lv_event_t *e) {
   case MENU_SYSINFO: load_screen(SCR_SYS); break;
   case MENU_SKY:     load_screen(SCR_SKY); break;
   case MENU_PMIC:    load_screen(SCR_PMIC); break;
+  case MENU_LIGHTS:  load_screen(SCR_LIGHTS); break;
   case MENU_SHUTDOWN: shutdown_request(); break;
   case MENU_TAPSNOOZE: // toggle in place, stay in the menu
     settings().tapSnooze = !settings().tapSnooze;
@@ -719,7 +726,7 @@ static void make_menu() {
 
   static const char *const NAMES[MENU_COUNT] = {
       "Alarm 1", "Alarm 2",    "Time & zone", "Disp & sound", "Tunes",
-      "System info", "Sky view", "Battery", "Tap snooze", "Mode",
+      "System info", "Sky view", "Battery", "Lights", "Tap snooze", "Mode",
       "Shutdown", "Back"};
   for (uint8_t i = 0; i < MENU_COUNT; i++)
     s_fMenu[i] = list_add_item(list, NULL, NAMES[i], menu_btn_cb, i);
@@ -1273,6 +1280,41 @@ static void make_pmic() {
   s_cPmic[0] = '\0';
 }
 
+// ----------------------------------------------------------- Lights scr ---
+// Manual per-section LED switches — a power-draw test tool (flip a section,
+// hop to the Battery screen, read IBAT). State persists while navigating;
+// an alarm's light show overrides it and leaves everything off afterwards.
+static void lights_cb(lv_event_t *e) {
+  uint8_t idx = (uint8_t)(uintptr_t)lv_event_get_user_data(e);
+  s_liState[idx] = lv_obj_has_state(s_liSw[idx], LV_STATE_CHECKED);
+  leds_set(s_liState[0], s_liState[1], s_liState[2]);
+}
+
+static void lights_sync_widgets() {
+  for (uint8_t i = 0; i < 3; i++) {
+    if (s_liState[i])
+      lv_obj_add_state(s_liSw[i], LV_STATE_CHECKED);
+    else
+      lv_obj_remove_state(s_liSw[i], LV_STATE_CHECKED);
+  }
+}
+
+static void make_lights() {
+  lv_obj_t *scr = make_settings_screen();
+  s_scr[SCR_LIGHTS] = scr;
+  static const char *const NAMES[3] = {"Left (10 LEDs)", "Bottom (14 LEDs)",
+                                       "Right (10 LEDs)"};
+  for (uint8_t i = 0; i < 3; i++) {
+    lv_obj_t *row = make_row(scr, NAMES[i]);
+    s_liSw[i] = lv_switch_create(row);
+    lv_obj_set_size(s_liSw[i], 48, 24);
+    lv_obj_add_event_cb(s_liSw[i], lights_cb, LV_EVENT_VALUE_CHANGED,
+                        (void *)(uintptr_t)i);
+    s_fLights[i] = s_liSw[i];
+    lv_obj_add_flag(s_liSw[i], LV_OBJ_FLAG_SCROLL_ON_FOCUS);
+  }
+}
+
 // --------------------------------------------------------- Sky view scr ---
 // Left: polar plot of the visible sky — center = zenith, outer ring =
 // horizon, north up. Right: SNR bars for the SKY_MAX_BARS strongest sats.
@@ -1484,6 +1526,10 @@ static void load_screen(UiScreen id) {
     refresh_pmic(true);
     group_set(NULL, 0);
     break;
+  case SCR_LIGHTS:
+    lights_sync_widgets();
+    group_set(s_fLights, 3);
+    break;
   case SCR_RING:  group_set(NULL, 0); break;
   }
   s_screen = id;
@@ -1619,6 +1665,7 @@ static void nav_back() {
   case SCR_SYS:
   case SCR_SKY:
   case SCR_PMIC:
+  case SCR_LIGHTS:
     load_screen(SCR_MENU);
     break;
   default:
@@ -1675,6 +1722,7 @@ void ui_begin() {
   make_sysinfo();
   make_sky();
   make_pmic();
+  make_lights();
   make_ringing();
 
   // Force every screen's MAIN part to true black now that all are built.

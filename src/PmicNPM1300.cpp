@@ -68,15 +68,14 @@
 #define NPM_CHARGE_MA 400
 
 // Die-temp charge throttle (linear charger burns (VSYS-VBAT)*I in the die):
-// pause charging at 55 C, resume at 45 C (chip defaults: 110/100). NOTE:
-// deliberately tight — at the 400 mA setpoint the die can reach ~50-60 C,
-// so charging may duty-cycle between these thresholds in normal use. That
-// is the intent: a thermostat that keeps the enclosure cool and lets the
-// charge rate self-regulate ("paused (hot)" + die temp are visible live on
-// the Battery screen). Same encoding as the die-temp ADC readout:
+// pause charging at 65 C, resume at 55 C (chip defaults: 110/100; first
+// tried 55/45, raised 10 C after bench observation). Thermostat behavior
+// is intended: if the die crosses 65 C the charge duty-cycles to keep the
+// enclosure cool ("paused (hot)" + die temp are live on the Battery
+// screen). Same encoding as the die-temp ADC readout:
 // K = (394670 - T_mdegC) / 792.6.
-#define NPM_DIETEMP_STOP_C 55
-#define NPM_DIETEMP_RESUME_C 45
+#define NPM_DIETEMP_STOP_C 65
+#define NPM_DIETEMP_RESUME_C 55
 #define NPM_DIETEMP_CODE(tC) ((uint16_t)((394670L - (tC)*1000L) * 10 / 7926))
 #define NPM_VTERM_MV 4100
 // BCHGVTERM: index 4 = 4.00 V, 50 mV steps (4.10 V -> 6)
