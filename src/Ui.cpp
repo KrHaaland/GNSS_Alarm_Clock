@@ -417,14 +417,45 @@ static void refresh_clock(bool force) {
 
   b[0] = '\0';
   if (storage_busy())
-    strcat(b, LV_SYMBOL_USB);
-  if (supercaps_ready())
-    strcat(b, LV_SYMBOL_BATTERY_FULL);
+    strcat(b, LV_SYMBOL_USB " ");
+  if (pmic_present()) {
+    // v2: battery icon mirroring SoC + percent, charge bolt while charging.
+    // The PMIC is polled every 5 s (an ADC round trip is ~2 ms), not per
+    // UI refresh.
+    static uint32_t socReadMs;
+    static int socPct = -1;
+    static bool socCharging;
+    if (socPct < 0 || (uint32_t)(millis() - socReadMs) >= 5000) {
+      PmicStatus st;
+      if (pmic_read_status(st)) {
+        socPct = pmic_soc_percent(st.vbatMv);
+        // trickle / CC / CV / recharge all count as "charging"
+        socCharging = (st.chargeStatus & 0x3C) != 0;
+      }
+      socReadMs = millis();
+    }
+    if (socPct >= 0) {
+      const char *bat = socPct >= 90   ? LV_SYMBOL_BATTERY_FULL
+                        : socPct >= 60 ? LV_SYMBOL_BATTERY_3
+                        : socPct >= 35 ? LV_SYMBOL_BATTERY_2
+                        : socPct >= 10 ? LV_SYMBOL_BATTERY_1
+                                       : LV_SYMBOL_BATTERY_EMPTY;
+      char t[20];
+      snprintf(t, sizeof(t), "%s%s %d%% ",
+               socCharging ? LV_SYMBOL_CHARGE : "", bat, socPct);
+      strcat(b, t);
+    }
+  } else if (supercaps_ready()) {
+    strcat(b, LV_SYMBOL_BATTERY_FULL " "); // v1: supercaps ready
+  }
   for (uint8_t i = 0; i < NUM_ALARMS; i++)
     if (settings().alarms[i].enabled) {
       strcat(b, LV_SYMBOL_BELL);
       break;
     }
+  size_t bl = strlen(b); // no trailing gap when the bell is absent
+  while (bl && b[bl - 1] == ' ')
+    b[--bl] = '\0';
   set_label_if(s_ckStatR, s_cStatR, sizeof(s_cStatR), b, force);
 
   // Big figure + small side label per mode. Modes other than the clock render
@@ -1168,12 +1199,7 @@ static void refresh_pmic(bool force) {
   } else if (!pmic_read_status(st)) {
     snprintf(b, sizeof(b), "nPM1300: read error");
   } else {
-    // Rough SoC from voltage, scaled to the configured termination voltage
-    // (linear 3.5 V..vterm). Reads high while charging.
-    int span = (int)pmic_vterm_mv() - 3500;
-    int pct = ((int)st.vbatMv - 3500) * 100 / (span > 0 ? span : 700);
-    if (pct < 0) pct = 0;
-    if (pct > 100) pct = 100;
+    int pct = pmic_soc_percent(st.vbatMv);
     snprintf(b, sizeof(b),
              "USB power: %s (limit 500 mA%s)\n"
              "Battery: %u.%02u V  (~%d%% est)\n"

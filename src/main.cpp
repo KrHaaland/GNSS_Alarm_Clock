@@ -128,7 +128,22 @@ static void dispatch_buttons() {
 // ---- Arduino entry points --------------------------------------------------
 
 void setup() {
-  Serial.begin(115200); // USB CDC; no wait — clock must boot headless
+  // Batteryless-boot survival (v2): the nPM1300 holds its VBUS limit at
+  // 100 mA until we raise it, and with no battery to supplement, any excess
+  // browns the board out. Clamp the two big loads firmware can reach BEFORE
+  // anything else runs: hold the L86 in reset (it hangs straight on 3.3V,
+  // no enable pin, and bursts ~100 mA acquiring) and force the amp off
+  // (R68 pulls TPA2016 ~SD high = ON by default). The UF2 bootloader phase
+  // remains unprotected — a custom bootloader is the full fix.
+  portb_output(GNSS_RESET_PORTPIN, false); // L86 core stopped
+  pinMode(PIN_AMP_SHUTDOWN, OUTPUT);
+  digitalWrite(PIN_AMP_SHUTDOWN, LOW); // amp off
+  // Some display modules strap BL with a PULL-UP: a floating PA19 means the
+  // backlight burns at full power all through the bootloader phase (found
+  // the hard way — batteryless boot-loop). Drive it low the instant the app
+  // starts; display_init() ramps it up properly later.
+  pinMode(PIN_OLED_BL, OUTPUT);
+  digitalWrite(PIN_OLED_BL, LOW);
 
   Wire.begin();
   // 100 kHz (standard mode): the custom board's I2C devices lack local HF
@@ -141,6 +156,10 @@ void setup() {
   // power-up default BEFORE any real load (LED sections!) can switch on.
   // No-op on v1 (no PMIC on the bus).
   pmic_begin();
+
+  portb_hiz(GNSS_RESET_PORTPIN); // budget secured: release the L86
+
+  Serial.begin(115200); // USB CDC; no wait — clock must boot headless
 
   // Storage first: it brings up TinyUSB MSC, best done early after boot.
   storage_begin();

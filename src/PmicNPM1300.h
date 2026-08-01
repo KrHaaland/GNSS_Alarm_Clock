@@ -25,3 +25,4 @@ uint16_t pmic_charge_current_ma();     // configured charge current
 uint16_t pmic_vterm_mv();              // configured termination voltage
 bool pmic_read_status(PmicStatus &out); // live measurement (~2 ms)
 const char *pmic_charge_text(uint8_t chargeStatus);
+int pmic_soc_percent(uint16_t vbatMv); // rough SoC estimate, 0..100

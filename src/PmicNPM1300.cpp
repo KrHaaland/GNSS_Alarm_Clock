@@ -89,6 +89,14 @@ bool pmic_vbus_500() { return s_limitOk; }
 uint16_t pmic_charge_current_ma() { return NPM_CHARGE_MA; }
 uint16_t pmic_vterm_mv() { return NPM_VTERM_MV; }
 
+int pmic_soc_percent(uint16_t vbatMv) {
+  // Rough SoC from voltage, linear 3.5 V .. the configured termination
+  // voltage. Reads high while charging; good enough for a status glance.
+  int span = (int)NPM_VTERM_MV - 3500;
+  int pct = ((int)vbatMv - 3500) * 100 / (span > 0 ? span : 700);
+  return pct < 0 ? 0 : pct > 100 ? 100 : pct;
+}
+
 bool pmic_read_status(PmicStatus &out) {
   if (!s_present)
     return false;

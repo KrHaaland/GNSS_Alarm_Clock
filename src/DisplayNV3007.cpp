@@ -307,7 +307,14 @@ void display_init() {
   cs_high();
   SPI.endTransaction();
 
-  digitalWrite(PIN_OLED_BL, HIGH); // backlight on
+  // Backlight soft-start: a full-step turn-on spikes VBUS past even the
+  // raised 500 mA limit and brownout-loops a battery-less board (the panel
+  // caps charge at the same instant). Ramp the PWM over ~100 ms instead;
+  // the UI applies the user's brightness right after boot anyway.
+  for (int d = 0; d <= 160; d += 8) {
+    analogWrite(PIN_OLED_BL, d);
+    delay(5);
+  }
 
 #if DISPLAY_SELFTEST
   display_selftest(); // never returns — bring-up pattern test
