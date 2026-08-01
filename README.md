@@ -62,12 +62,14 @@ a 428×142 color TFT driven by four buttons.
   computes the offset. Manual zone override is available in the menu.
 - **Alarms**: Two independent alarms with per-weekday masks. On trigger:
   - the **34 LEDs** (3 sections: left 10 / bottom 14 / right 10) run a chase at
-    full brightness from the LTC3226 supercap rail (so brightness doesn't depend
-    on the USB supply),
+    full brightness from a battery-capable rail (v2: TPS61023 5 V boost;
+    v1: the LTC3226 supercap rail) — brightness never depends on the USB
+    supply,
   - a tune plays: a **WAV** from the QSPI flash drive, or one of 3 built-in
     melodies, via **DAC0 → TPA2016D2** class-D amp → speaker,
   - optional **escalation**: after *N* minutes unacknowledged, the power buzzer
-    joins in; auto-silence after 30 min.
+    joins in (v1 hardware only — v2 dropped the buzzer); auto-silence after
+    30 min.
   - **Snooze**: short-press any button, or double-tap the clock (LIS3DH).
     **Stop**: long-press any button.
 - **UI**: **LVGL 9.5** on an **NV3007 color TFT** (see below), driven by the 4
