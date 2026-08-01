@@ -258,6 +258,12 @@ void loop() {
   // readings under 3.40 V -> ship mode, so the cell never grinds through
   // the brownout-loop zone below the LM3671's dropout. BUTTON1 or a USB
   // plug wakes the PMIC; the RTC keeps time throughout (VBACKUP on VBAT).
+  // nPM1300 IRQ line (GPIO0 -> PA04): high while VBUS attach/removal events
+  // pend. Attach must re-apply the input-current limit, which the PMIC
+  // resets to 100 mA on every replug.
+  if (pmic_present() && digitalRead(PIN_CAPGOOD))
+    pmic_handle_irq();
+
   // The check pauses whenever an alarm is Ringing OR Snoozed: the LED show
   // + speaker sag VBAT 50-100 mV (cell IR), which would false-trigger the
   // cutoff mid-alarm — and a shutdown while snoozed would kill the re-ring.

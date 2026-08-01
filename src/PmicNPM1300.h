@@ -24,13 +24,21 @@ struct PmicStatus {
 #define PMIC_VBAT_SHIP_MV 3400     // runtime cutoff -> ship mode
 #define PMIC_VBAT_BOOT_MIN_MV 3450 // boot gate (hysteresis above cutoff)
 
-void pmic_begin();    // detect; raise VBUS limit to 500 mA; start charger
+void pmic_begin();    // detect; set VBUS limit from CC; start charger
+// Re-read the USB-C CC advertisement and set the input limit: 500 mA on
+// Default USB/PC ports (hard rule), 1500 mA on detected 1.5/3 A sources.
+// MUST be called on every VBUS re-attach — the limit resets to 100 mA.
+void pmic_vbus_reconfigure();
+bool pmic_vbus_limit_ok();     // last limit write verified
+uint16_t pmic_vbus_limit_ma(); // active input limit (500 or 1500)
+// Service the PMIC's IRQ line (GPIO0 -> PA04, configured in pmic_begin):
+// acks pending events; a VBUS attach re-applies the input-limit config.
+void pmic_handle_irq();
 // Cut the battery from VSYS (<500 nA). Wake: BUTTON1 (SHPHLD) or USB plug.
 // The RTC keeps time through this (its VBACKUP sits directly on VBAT).
 // Does not return when VBUS is absent.
 void pmic_enter_ship_mode();
 bool pmic_present();  // true when an nPM1300 ACKed at boot
-bool pmic_vbus_500(); // true when the 500 mA limit was applied OK
 uint16_t pmic_charge_current_ma();     // configured charge current
 uint16_t pmic_vterm_mv();              // configured termination voltage
 bool pmic_read_status(PmicStatus &out); // live measurement (~2 ms)

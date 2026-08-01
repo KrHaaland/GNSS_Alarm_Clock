@@ -1239,14 +1239,15 @@ static void refresh_pmic(bool force) {
   } else {
     int pct = pmic_soc_percent(st.vbatMv);
     snprintf(b, sizeof(b),
-             "USB power: %s (limit 500 mA%s)\n"
+             "USB power: %s (limit %u mA%s)\n"
              "Battery: %u.%02u V  (~%d%% est)\n"
              "Current: %+d mA (%s)\n"
              "Charger: %s @ %u mA -> %u.%02u V\n"
              "PMIC die: %d.%d C\n"
              "Status raw: 0x%02X",
              st.vbusPresent ? "present" : "absent",
-             pmic_vbus_500() ? "" : ", RAISE FAILED",
+             (unsigned)pmic_vbus_limit_ma(),
+             pmic_vbus_limit_ok() ? "" : ", RAISE FAILED",
              st.vbatMv / 1000, (st.vbatMv % 1000) / 10, pct, st.ibatMa,
              st.ibatMa > 0   ? "into battery"
              : st.ibatMa < 0 ? "from battery"

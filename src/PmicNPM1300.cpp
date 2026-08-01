@@ -9,8 +9,11 @@
 // VBUSIN group (base 0x02)
 #define NPM_TASKUPDATEILIMSW 0x0200 // write 1: apply VBUSINILIM0
 #define NPM_VBUSINILIM0 0x0201      // 1 = 100 mA (power-up default), 5 = 500 mA
+#define NPM_USBCDETECTSTATUS 0x0205 // CC1 [1:0] / CC2 [3:2]: 0 none,
+                                    // 1 Default USB, 2 = 1.5 A, 3 = 3 A
 #define NPM_VBUSINSTATUS 0x0207     // b0 VBUSINPRESENT
 #define NPM_ILIM_500MA 5
+#define NPM_ILIM_1500MA 15
 
 // BCHARGER group (base 0x03)
 #define NPM_BCHGENABLESET 0x0304   // b0 = enable charging
@@ -26,6 +29,15 @@
 // battery): the charger reads a constant ~25 C, i.e. temperature limits are
 // effectively bypassed. 10 kOhm is the type we must tell the ADC about.
 #define NPM_ADCNTCRSEL 0x050A // 1 = 10k NTC
+
+// MAIN event system (base 0x00) — routed out on GPIO0 as an IRQ line
+#define NPM_EVENTSVBUSIN0SET 0x0016 // b0 = VBUS detected, b1 = VBUS removed
+#define NPM_EVENTSVBUSIN0CLR 0x0017
+#define NPM_INTENEVENTSVBUSIN0SET 0x0018
+
+// GPIO group (base 0x06) — GPIO0 is wired to the MCU's PA04
+#define NPM_GPIOMODE0 0x0600
+#define NPM_GPIOMODE_GPOIRQ 5 // GPIO drives high while unmasked events pend
 
 // SHIP group (base 0x0B)
 #define NPM_TASKENTERSHIPMODE 0x0B02 // battery cut from VSYS; SHPHLD/USB wakes
@@ -72,6 +84,7 @@
 
 static bool s_present;
 static bool s_limitOk;
+static uint16_t s_limitMa = 500;
 
 static bool npm_write(uint16_t reg, uint8_t val) {
   Wire.beginTransmission(NPM_ADDR);
@@ -92,6 +105,25 @@ static int npm_read(uint16_t reg) {
   return Wire.read();
 }
 
+void pmic_vbus_reconfigure() {
+  if (!s_present)
+    return;
+  // Pick the input limit from the USB-C CC advertisement (the PMIC's
+  // comparators read the source's Rp resistor — no PD protocol involved):
+  // Default USB / A-to-C cable / PC port -> 500 mA (the hard PC-port rule);
+  // a 1.5 A or 3 A source -> 1500 mA (chip max), so charging + alarm peaks
+  // never touch the battery on a real charger.
+  int cc = npm_read(NPM_USBCDETECTSTATUS);
+  uint8_t cc1 = cc < 0 ? 0 : (cc & 0x03);
+  uint8_t cc2 = cc < 0 ? 0 : ((cc >> 2) & 0x03);
+  uint8_t best = cc1 > cc2 ? cc1 : cc2;
+  uint8_t ilim = (best >= 2) ? NPM_ILIM_1500MA : NPM_ILIM_500MA;
+  s_limitMa = (best >= 2) ? 1500 : 500;
+  s_limitOk = npm_write(NPM_VBUSINILIM0, ilim) &&
+              npm_write(NPM_TASKUPDATEILIMSW, 1) &&
+              npm_read(NPM_VBUSINILIM0) == ilim;
+}
+
 void pmic_begin() {
   Wire.beginTransmission(NPM_ADDR);
   s_present = (Wire.endTransmission() == 0);
@@ -99,10 +131,9 @@ void pmic_begin() {
     return; // v1 board: LTC3226 + supercaps, nothing to configure
 
   // 1) Unlock the USB budget FIRST — the 100 mA power-up default browns the
-  // board out on any real load. Re-applied every boot (resets with VBUS).
-  s_limitOk = npm_write(NPM_VBUSINILIM0, NPM_ILIM_500MA) &&
-              npm_write(NPM_TASKUPDATEILIMSW, 1) &&
-              npm_read(NPM_VBUSINILIM0) == NPM_ILIM_500MA;
+  // board out on any real load. Re-applied every boot AND on every VBUS
+  // re-attach (the limit resets to 100 mA with VBUS).
+  pmic_vbus_reconfigure();
 
   // 2) Charger: current + termination BEFORE enabling.
   uint16_t idx = NPM_CHARGE_MA / 2;
@@ -118,6 +149,24 @@ void pmic_begin() {
   npm_write(NPM_DIETEMPRESUMELSB, (uint8_t)(kResume & 3));
   npm_write(NPM_BCHGENABLESET, 1);
   npm_write(NPM_ADCIBATMEASEN, 1); // piggyback IBAT on every VBAT measurement
+
+  // Interrupt line to the MCU: GPIO0 (-> PA04) goes high on VBUS attach or
+  // removal, so the input-limit reconfiguration is immediate instead of
+  // polled. main.cpp watches the pin and calls pmic_handle_irq().
+  npm_write(NPM_EVENTSVBUSIN0CLR, 0x03); // drop stale events
+  npm_write(NPM_INTENEVENTSVBUSIN0SET, 0x03);
+  npm_write(NPM_GPIOMODE0, NPM_GPIOMODE_GPOIRQ);
+}
+
+void pmic_handle_irq() {
+  if (!s_present)
+    return;
+  int ev = npm_read(NPM_EVENTSVBUSIN0SET);
+  npm_write(NPM_EVENTSVBUSIN0CLR, 0xFF); // ack; the GPIO0 line drops
+  if (ev > 0 && (ev & 0x01)) { // VBUS attached
+    delay(20); // let the CC comparators settle before classifying the source
+    pmic_vbus_reconfigure();
+  }
 }
 
 void pmic_enter_ship_mode() {
@@ -129,7 +178,8 @@ void pmic_enter_ship_mode() {
 }
 
 bool pmic_present() { return s_present; }
-bool pmic_vbus_500() { return s_limitOk; }
+bool pmic_vbus_limit_ok() { return s_limitOk; }
+uint16_t pmic_vbus_limit_ma() { return s_limitMa; }
 uint16_t pmic_charge_current_ma() { return NPM_CHARGE_MA; }
 uint16_t pmic_vterm_mv() { return NPM_VTERM_MV; }
 
