@@ -60,7 +60,7 @@ every VBUS plug) and its charger **disabled** until the host configures it.
    ILIM write into the planned custom uf2-samdx1 bootloader; add inrush
    limiting/load switches on the next board spin.
 
-6. **Low-battery policy (ship mode)**: on battery only — never on a
+7. **Low-battery policy (ship mode)**: on battery only — never on a
    charger, and never while an alarm is Ringing/Snoozed (the LED+speaker
    load sags VBAT 50–100 mV and would false-trigger; waking someone beats
    the last percent of battery) — three consecutive 10 s readings under
@@ -69,17 +69,17 @@ every VBUS plug) and its charger **disabled** until the host configures it.
    "LOW BATTERY" for 4 s, then back to ship mode. A menu "Shutdown" item
    (OK-confirmed, refused on USB power) enters the same state manually.
    Wake is BUTTON1 (=SHPHLD) or USB attach.
-7. **Battery telemetry**: IBAT measurement rides on every VBAT ADC round;
+8. **Battery telemetry**: IBAT measurement rides on every VBAT ADC round;
    the Battery screen shows signed current, the active input limit, charge
    state and die temperature — the bench multimeter lives on-screen.
 
 ## Consequences
 - Any future code that adds a load at boot must either run after
   `pmic_begin()` or be added to the clamp block.
-- The 500 mA write also caps charging from strong wall chargers; if faster
-  charging is ever wanted, read the PMIC's CC-detection status and raise
-  the limit only on 1.5/3 A sources.
+- On 1.5/3 A sources the limit is 1500 mA, so charging + alarm peaks are
+  fully USB-fed; the 400 mA charge setpoint (not the input limit) is then
+  the charging bottleneck, by choice.
 - The fixed-10k NTC means no real temperature protection — acceptable for
-  a stationary indoor clock at 200 mA charge rate.
+  a stationary indoor clock at a 400 mA setpoint with the 55 C thermostat.
 - VBUS replug always reverts to 100 mA until `pmic_begin()` runs — device
   behavior right after plug-in (before boot completes) stays budget-bound.
