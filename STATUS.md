@@ -1,6 +1,6 @@
 # Project Status Report — GNSS Alarm Clock
 
-_Last updated: 2026-08-01_
+_Last updated: 2026-08-01 — **release [v1.0.0](https://github.com/KrHaaland/GNSS_Alarm_Clock/releases/tag/v1.0.0) published** (bin + UF2 for both boards)_
 
 Custom **SAMD51** board (Adafruit Metro M4 compatible) — the **v2 board
 (SAMD51J20A, nPM1300 PMIC, Li-ion, USB-C) is now the primary target**; the
