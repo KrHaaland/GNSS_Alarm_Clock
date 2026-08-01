@@ -24,10 +24,12 @@ Dropdown lists open as a full-screen overlay with the current choice centered.
 ## The clock screen
 
 - Big **HH:MM** (or the active mode's figure). Top-left: satellite count.
-  Top-right: USB (host owns the TUNES drive), **battery with SoC percent**
-  (icon mirrors the level; a bolt appears while charging — v1 boards show a
-  plain battery when the supercaps are ready), bell (an alarm is enabled).
-  Bottom: date and next alarm.
+  Top-right: USB (host owns the TUNES drive), a charge bolt while charging,
+  a **drawn battery gauge** (white frame, fill width = charge level, colored
+  red under 20% / orange under 50% / green above — no percent number; the
+  estimate is approximate by nature, especially while charging), bell (an
+  alarm is enabled). v1 boards show a full green battery when the supercaps
+  are ready. Bottom: date and next alarm.
 - **Low battery** (v2): under 3.40 V on battery (never during an alarm, never on a charger) the clock powers itself off; woken below 3.45 V without a charger it shows **LOW BATTERY** for 4 s and sleeps again. The RTC keeps time throughout.
 - Display dims after the configured timeout — any button **or a small
   shake/tap** wakes it (LIS3DH motion).

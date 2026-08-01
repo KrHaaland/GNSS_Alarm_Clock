@@ -64,10 +64,17 @@ static lv_obj_t *s_msgbox;
 static lv_obj_t *s_scr[SCR_COUNT]; // indexed by UiScreen
 
 // Clock
-static lv_obj_t *s_ckStatL, *s_ckStatR;
+static lv_obj_t *s_ckStatL;
 static lv_obj_t *s_ckBig, *s_ckSec, *s_ckAmpm, *s_ckBottom;
-static char s_cStatL[24], s_cStatR[24];
+static char s_cStatL[24];
 static char s_cBig[12], s_cSec[8], s_cAmpm[8], s_cBottom[72];
+
+// Top-right status row: [USB] [bolt] [battery widget] [bell] in a flex row.
+// The battery is drawn, not a font glyph: white frame + nub, fill bar whose
+// width tracks the measured SoC and whose color grades red/orange/green.
+static lv_obj_t *s_ckStatRow, *s_ckUsb, *s_ckBolt, *s_ckBell;
+static lv_obj_t *s_ckBatFrame, *s_ckBatFill;
+#define BAT_FILL_MAX_W 20 // frame inner width (px)
 
 // Starry night: white dots behind the clock, shown 22:00-06:00 when enabled.
 // Created before the labels so they stay in the background; label glyphs
@@ -421,48 +428,54 @@ static void refresh_clock(bool force) {
   // (time source + DST indicator removed from the clock face; still shown on
   //  the System info screen.)
 
-  b[0] = '\0';
-  if (storage_busy())
-    strcat(b, LV_SYMBOL_USB " ");
+  // Top-right status row. The PMIC is polled every 5 s (an ADC round trip
+  // is ~2 ms), not per UI refresh; the displayed SoC is the IR-compensated
+  // voltage measurement — no history, no capacity assumptions.
+  (void)force;
+  bool showUsb = storage_busy();
+  bool showBolt = false;
+  int socPctNow = -1;
   if (pmic_present()) {
-    // v2: battery icon mirroring SoC + percent, charge bolt while charging.
-    // The PMIC is polled every 5 s (an ADC round trip is ~2 ms), not per
-    // UI refresh.
     static uint32_t socReadMs;
     static int socPct = -1;
     static bool socCharging;
     if (socPct < 0 || (uint32_t)(millis() - socReadMs) >= 5000) {
       PmicStatus st;
       if (pmic_read_status(st)) {
-        socPct = st.socPct;
-        // trickle / CC / CV / recharge all count as "charging"
+        socPct = pmic_soc_percent(st.vbatMv, st.ibatMa);
         socCharging = (st.chargeStatus & 0x3C) != 0;
       }
       socReadMs = millis();
     }
-    if (socPct >= 0) {
-      const char *bat = socPct >= 90   ? LV_SYMBOL_BATTERY_FULL
-                        : socPct >= 60 ? LV_SYMBOL_BATTERY_3
-                        : socPct >= 35 ? LV_SYMBOL_BATTERY_2
-                        : socPct >= 10 ? LV_SYMBOL_BATTERY_1
-                                       : LV_SYMBOL_BATTERY_EMPTY;
-      char t[20];
-      snprintf(t, sizeof(t), "%s%s %d%% ",
-               socCharging ? LV_SYMBOL_CHARGE : "", bat, socPct);
-      strcat(b, t);
-    }
+    socPctNow = socPct;
+    showBolt = socCharging;
   } else if (supercaps_ready()) {
-    strcat(b, LV_SYMBOL_BATTERY_FULL " "); // v1: supercaps ready
+    socPctNow = 100; // v1: supercaps ready = full green
   }
+  bool showBell = false;
   for (uint8_t i = 0; i < NUM_ALARMS; i++)
-    if (settings().alarms[i].enabled) {
-      strcat(b, LV_SYMBOL_BELL);
-      break;
-    }
-  size_t bl = strlen(b); // no trailing gap when the bell is absent
-  while (bl && b[bl - 1] == ' ')
-    b[--bl] = '\0';
-  set_label_if(s_ckStatR, s_cStatR, sizeof(s_cStatR), b, force);
+    if (settings().alarms[i].enabled)
+      showBell = true;
+
+  if (showUsb) lv_obj_remove_flag(s_ckUsb, LV_OBJ_FLAG_HIDDEN);
+  else lv_obj_add_flag(s_ckUsb, LV_OBJ_FLAG_HIDDEN);
+  if (showBolt) lv_obj_remove_flag(s_ckBolt, LV_OBJ_FLAG_HIDDEN);
+  else lv_obj_add_flag(s_ckBolt, LV_OBJ_FLAG_HIDDEN);
+  if (showBell) lv_obj_remove_flag(s_ckBell, LV_OBJ_FLAG_HIDDEN);
+  else lv_obj_add_flag(s_ckBell, LV_OBJ_FLAG_HIDDEN);
+
+  if (socPctNow >= 0) {
+    lv_obj_remove_flag(s_ckBatFrame, LV_OBJ_FLAG_HIDDEN);
+    int w = (socPctNow * BAT_FILL_MAX_W) / 100;
+    if (w < 1) w = 1;
+    lv_obj_set_width(s_ckBatFill, w);
+    lv_color_t col = socPctNow < 20   ? lv_color_hex(0xFF0000)
+                     : socPctNow < 50 ? lv_color_hex(0xFF9500)
+                                      : lv_color_hex(0x00C853);
+    lv_obj_set_style_bg_color(s_ckBatFill, col, 0);
+  } else {
+    lv_obj_add_flag(s_ckBatFrame, LV_OBJ_FLAG_HIDDEN);
+  }
 
   // Big figure + small side label per mode. Modes other than the clock render
   // first and fall through only for the bottom (date/alarm) line.
@@ -594,9 +607,55 @@ static void make_clock() {
   lv_obj_set_style_text_font(s_ckStatL, &lv_font_montserrat_16, 0);
   lv_obj_align(s_ckStatL, LV_ALIGN_TOP_LEFT, 2, 0);
 
-  s_ckStatR = lv_label_create(scr);
-  lv_obj_set_style_text_font(s_ckStatR, &lv_font_montserrat_16, 0);
-  lv_obj_align(s_ckStatR, LV_ALIGN_TOP_RIGHT, -2, 0);
+  // Status row (flex) top-right: USB, charge bolt, battery widget, bell.
+  s_ckStatRow = lv_obj_create(scr);
+  lv_obj_set_size(s_ckStatRow, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+  lv_obj_align(s_ckStatRow, LV_ALIGN_TOP_RIGHT, -2, 0);
+  lv_obj_set_style_border_width(s_ckStatRow, 0, 0);
+  lv_obj_set_style_bg_opa(s_ckStatRow, LV_OPA_TRANSP, 0);
+  lv_obj_set_style_pad_all(s_ckStatRow, 0, 0);
+  lv_obj_set_style_pad_column(s_ckStatRow, 5, 0);
+  lv_obj_set_flex_flow(s_ckStatRow, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(s_ckStatRow, LV_FLEX_ALIGN_START,
+                        LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+  lv_obj_remove_flag(s_ckStatRow, (lv_obj_flag_t)(LV_OBJ_FLAG_SCROLLABLE |
+                                                  LV_OBJ_FLAG_CLICKABLE));
+  s_ckUsb = lv_label_create(s_ckStatRow);
+  lv_obj_set_style_text_font(s_ckUsb, &lv_font_montserrat_16, 0);
+  lv_label_set_text_static(s_ckUsb, LV_SYMBOL_USB);
+  s_ckBolt = lv_label_create(s_ckStatRow);
+  lv_obj_set_style_text_font(s_ckBolt, &lv_font_montserrat_16, 0);
+  lv_label_set_text_static(s_ckBolt, LV_SYMBOL_CHARGE);
+  // Battery: white 2px frame, colored fill inset 1px, nub outside right.
+  s_ckBatFrame = lv_obj_create(s_ckStatRow);
+  lv_obj_set_size(s_ckBatFrame, BAT_FILL_MAX_W + 6, 13);
+  lv_obj_set_style_border_width(s_ckBatFrame, 2, 0);
+  lv_obj_set_style_border_color(s_ckBatFrame, lv_color_white(), 0);
+  lv_obj_set_style_radius(s_ckBatFrame, 2, 0);
+  lv_obj_set_style_bg_opa(s_ckBatFrame, LV_OPA_TRANSP, 0);
+  lv_obj_set_style_pad_all(s_ckBatFrame, 1, 0);
+  lv_obj_remove_flag(s_ckBatFrame, (lv_obj_flag_t)(LV_OBJ_FLAG_SCROLLABLE |
+                                                   LV_OBJ_FLAG_CLICKABLE));
+  s_ckBatFill = lv_obj_create(s_ckBatFrame);
+  lv_obj_set_size(s_ckBatFill, 1, LV_PCT(100));
+  lv_obj_set_style_border_width(s_ckBatFill, 0, 0);
+  lv_obj_set_style_radius(s_ckBatFill, 1, 0);
+  lv_obj_set_style_bg_opa(s_ckBatFill, LV_OPA_COVER, 0);
+  lv_obj_align(s_ckBatFill, LV_ALIGN_LEFT_MID, 0, 0);
+  lv_obj_remove_flag(s_ckBatFill, (lv_obj_flag_t)(LV_OBJ_FLAG_SCROLLABLE |
+                                                  LV_OBJ_FLAG_CLICKABLE));
+  lv_obj_t *nub = lv_obj_create(s_ckStatRow); // battery tip
+  lv_obj_set_size(nub, 3, 7);
+  lv_obj_set_style_bg_color(nub, lv_color_white(), 0);
+  lv_obj_set_style_bg_opa(nub, LV_OPA_COVER, 0);
+  lv_obj_set_style_border_width(nub, 0, 0);
+  lv_obj_set_style_radius(nub, 1, 0);
+  lv_obj_set_style_margin_left(nub, -4, 0); // flush against the frame
+  lv_obj_remove_flag(nub, (lv_obj_flag_t)(LV_OBJ_FLAG_SCROLLABLE |
+                                          LV_OBJ_FLAG_CLICKABLE));
+  s_ckBell = lv_label_create(s_ckStatRow);
+  lv_obj_set_style_text_font(s_ckBell, &lv_font_montserrat_16, 0);
+  lv_label_set_text_static(s_ckBell, LV_SYMBOL_BELL);
 
   s_ckBig = lv_label_create(scr);
   lv_obj_set_style_text_font(s_ckBig, &font_clock_100, 0);
@@ -613,7 +672,13 @@ static void make_clock() {
   lv_obj_set_style_text_font(s_ckBottom, &lv_font_montserrat_16, 0);
   lv_obj_align(s_ckBottom, LV_ALIGN_BOTTOM_MID, 0, 0);
 
-  s_cStatL[0] = s_cStatR[0] = '\0';
+  // Z-order: blacken() gives every object an OPAQUE black background, so
+  // the big clock label's box would cover the status symbols where they
+  // overlap. Lift both status areas above everything else.
+  lv_obj_move_foreground(s_ckStatL);
+  lv_obj_move_foreground(s_ckStatRow);
+
+  s_cStatL[0] = '\0';
   s_cBig[0] = s_cSec[0] = s_cAmpm[0] = s_cBottom[0] = '\0';
   refresh_clock(true);
 }
@@ -1244,7 +1309,7 @@ static void refresh_pmic(bool force) {
   } else if (!pmic_read_status(st)) {
     snprintf(b, sizeof(b), "nPM1300: read error");
   } else {
-    int pct = st.socPct;
+    int pct = pmic_soc_percent(st.vbatMv, st.ibatMa);
     snprintf(b, sizeof(b),
              "USB power: %s (limit %u mA%s)\n"
              "Battery: %u.%02u V  (~%d%% est)\n"

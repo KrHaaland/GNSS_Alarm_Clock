@@ -85,12 +85,8 @@
 // BCHGVTERM: index 4 = 4.00 V, 50 mV steps (4.10 V -> 6)
 #define NPM_VTERM_IDX (4 + (NPM_VTERM_MV - 4000) / 50)
 
-#define NPM_BATTERY_MAH 3000 // LG HG2 (see HARDWARE_V2.md)
-
 static bool s_present;
 static bool s_limitOk;
-static int32_t s_socMilli = -1; // tracked SoC in milli-%, -1 = not anchored
-static uint32_t s_socMs;
 static uint16_t s_limitMa = 500;
 static uint16_t s_chargeMa = NPM_CHARGE_MA_500BUDGET;
 
@@ -264,30 +260,6 @@ bool pmic_read_status(PmicStatus &out) {
 
   out.chargeStatus = (uint8_t)chg;
   out.vbusPresent = (vbus & 0x01) != 0;
-
-  // SoC tracking. On battery/idle the IR-compensated voltage estimate is
-  // trusted directly. While CHARGING, voltage is a liar (the polarization
-  // lift at 800 mA is ~270 mV — far beyond the ohmic 160 mOhm model, seen
-  // as an instant +20% at plug-in), so we coulomb-count instead: anchor at
-  // the pre-plug value and integrate the measured current against the
-  // cell capacity. The 'charged' status snaps to 100%.
-  uint32_t now = millis();
-  uint32_t dt = now - s_socMs;
-  s_socMs = now;
-  bool charging = (chg & 0x3C) != 0;
-  if (chg & 0x02) { // charge complete
-    s_socMilli = 100000;
-  } else if (!charging || s_socMilli < 0) {
-    s_socMilli = pmic_soc_percent(out.vbatMv, out.ibatMa) * 1000L;
-  } else if (out.ibatMa > 0 && dt < 60000) {
-    // milli-% += mA * ms * 100000 / (mAh * 3600000)
-    s_socMilli += ((int64_t)out.ibatMa * dt * 100) / ((int64_t)NPM_BATTERY_MAH * 3600);
-    if (s_socMilli > 99000)
-      s_socMilli = 99000; // save 100% for the charger's own verdict
-  }
-  if (s_socMilli < 0)
-    s_socMilli = 0;
-  out.socPct = (uint8_t)(s_socMilli / 1000);
   return true;
 }
 
