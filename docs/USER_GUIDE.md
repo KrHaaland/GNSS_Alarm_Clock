@@ -28,6 +28,7 @@ Dropdown lists open as a full-screen overlay with the current choice centered.
   (icon mirrors the level; a bolt appears while charging — v1 boards show a
   plain battery when the supercaps are ready), bell (an alarm is enabled).
   Bottom: date and next alarm.
+- **Low battery** (v2): under 3.40 V on battery (never during an alarm, never on a charger) the clock powers itself off; woken below 3.45 V without a charger it shows **LOW BATTERY** for 4 s and sleeps again. The RTC keeps time throughout.
 - Display dims after the configured timeout — any button **or a small
   shake/tap** wakes it (LIS3DH motion).
 - **Starry night** (Disp & sound): between **22:00 and 06:00** a couple dozen
@@ -44,7 +45,7 @@ Dropdown lists open as a full-screen overlay with the current choice centered.
 | Disp & sound | **Volume** (0–10, live while a tune plays), brightness slider (live), dim-after timeout, dim level, **Starry night** (stars behind the clock 22–06). |
 | Tunes | Preview built-in melodies and WAVs from the TUNES drive (press again to stop). Unavailable while the USB host owns the drive. |
 | System info | Fix/sats/HDOP, position, speed/altitude, zone + POSIX string, UTC offset/DST, GNSS sync age, RTC status, caps status, **snooze counters**, FW version. Scroll with B2/B3. |
-| Battery | (v2 boards) Live power status: USB present, battery voltage + estimated SoC, charge state (trickle/CC/CV/charged — "battery assisting" means the load momentarily exceeds the 500 mA USB budget and the battery covers the difference), PMIC die temperature. Charging is 200 mA to 4.10 V (gentle, for cell longevity). |
+| Battery | (v2 boards) Live power status: USB present, battery voltage + estimated SoC, charge state (trickle/CC/CV/charged — "battery assisting" means the load momentarily exceeds the 500 mA USB budget and the battery covers the difference), PMIC die temperature. Charging targets 400 mA to 4.10 V (the PMIC gives charging whatever remains of the 500 mA USB budget, and pauses above 55 °C die temp until it cools to 45 °C). Live battery current (+ = charging, − = discharging) is shown on this screen. |
 | Sky view | Live satellite map: left a **polar plot** (center = straight up, outer ring = horizon, N = north; dot color green/yellow/red/grey = signal strength, border white = GPS / cyan = GLONASS), right **SNR bars** for the strongest 12 with PRN numbers (65–96 = GLONASS). Updates every ~5 s — walk the clock around to find the best indoor reception spot. Works without a fix. |
 | Tap snooze | Toggle double-tap-to-snooze. |
 | Mode | Cycles the main screen: **Alarm clock → Speedometer → Altimeter → Game mode**. |
