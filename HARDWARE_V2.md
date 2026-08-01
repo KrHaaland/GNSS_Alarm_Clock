@@ -250,5 +250,5 @@ Collected findings from the v2 bring-up, in rough priority order:
 - [x] Battery/PMIC screen in the menu
 - [ ] Escalation buzzer is a silent no-op on v2 (PB16 unrouted) — gate the
       escalation stage on `pmic_present()` or repurpose (max volume + LEDs)
-- [ ] Battery icon/% on the clock screen; low-battery behavior
-- [ ] Optional: nPM1300 GPIO0 as charge indicator on PA04
+- [x] Battery gauge on the clock screen; low-battery ship-mode policy
+- [x] nPM1300 GPIO0 -> PA04 used as IRQ line (VBUS attach/removal)

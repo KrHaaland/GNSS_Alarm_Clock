@@ -1,6 +1,6 @@
 # Project Status Report — GNSS Alarm Clock
 
-_Last updated: 2026-08-01 — **release [v1.0.0](https://github.com/KrHaaland/GNSS_Alarm_Clock/releases/tag/v1.0.0) published** (bin + UF2 for both boards)_
+_Last updated: 2026-08-02 — **release [v1.0.0](https://github.com/KrHaaland/GNSS_Alarm_Clock/releases/tag/v1.0.0) published** (bin + UF2 for both boards)_
 
 Custom **SAMD51** board (Adafruit Metro M4 compatible) — the **v2 board
 (SAMD51J20A, nPM1300 PMIC, Li-ion, USB-C) is now the primary target**; the
@@ -21,7 +21,7 @@ none stop daily use — the clock runs off the battery-backed RTC.
 |---|---|---|
 | Display (NV3007) | ✅ Working | 428×142 landscape, vendor-page init, Y+14 offset, 30 MHz mode 0 |
 | GNSS time (L86) | 🔴 Module dying | Works only when heated (4-5 proto cycles); replacement ordered. FW verified OK |
-| Power/charging (v2) | ✅ Working | nPM1300: 500 mA budget, 200 mA charge → 4.10 V, SoC in UI (ADR-0014) |
+| Power/charging (v2) | ✅ Working | CC-based 500/1500 mA budget, 400/800 mA charge → 4.10 V, 80/70 °C thermostat, ship-mode low-batt policy (ADR-0014/0016) |
 | Timezone + DST | ✅ Working | Offline coord→POSIX-TZ, persisted to flash |
 | RTC (RV-3028) | ✅ Working | U5 hand-soldered onto the prototype; ACKs at 0x52, settings EEPROM verified |
 | Alarms + snooze | ✅ Implemented | Verify ring/re-ring/tap on hardware (§4) |
@@ -34,6 +34,31 @@ none stop daily use — the clock runs off the battery-backed RTC.
 ---
 
 ## 2. Recent changes
+
+**Power management completed (2026-08-01 → 08-02)** — ADR-0014/0016:
+- **CC-following input limit** (500 mA PC / 1500 mA charger) re-applied
+  instantly on replug via the nPM1300's GPIO0 IRQ (wired to PA04) — fixed
+  a real bug where a replug left the limit at 100 mA, draining the battery
+  in the charger.
+- **Charging**: setpoint follows the budget (400/800 mA), 4.10 V
+  termination, die thermostat bench-tuned 55/45 → **80/70 °C** (measured:
+  800 mA continuous, die ~75 °C cold-board / near 80 heat-soaked; thermal
+  vias spread ~1 W across the ground plane). VDDCORE moved to the MCU's
+  internal buck (~4–6 mA saved).
+- **Battery telemetry**: IBAT measurement on the Battery screen (signed
+  current = the bench multimeter on-screen); Lights menu (per-section LED
+  switches) as its power-measurement companion.
+- **Low-battery policy**: ship mode below 3.40 V on battery (paused while
+  an alarm rings/snoozes; the ring beats the last percent), fullscreen
+  icon + Montserrat-48 "LOW BATTERY" on a too-early wake (J20-only — it
+  overflowed the J19), manual Shutdown menu item; BUTTON1/USB wakes, the
+  battery-backed RTC keeps time. Field-proven on a genuinely empty cell.
+- **SoC**: IR-compensated voltage estimate (160 mΩ path calibrated from
+  the observed plug-in jump); a coulomb-counting tracker was tried and
+  deliberately reverted (guesses beat by measurements — ADR-0016). Clock
+  face shows a drawn battery gauge (red/orange/green fill), no percent.
+- Battery identified: **LG HG2 18650 3000 mAh, unprotected power cell** —
+  the firmware's cutoff IS the protection layer.
 
 **v2 board bring-up (2026-07-22 → 08-01)** — full session log in
 `docs/sessions/`. Every subsystem verified on the new board:

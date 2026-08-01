@@ -83,6 +83,15 @@ a 428×142 color TFT driven by four buttons.
   - **Game mode** — the LIS3DH becomes a **USB HID gamepad**: tilt = stick
     X/Y, B2–B4 = buttons 1–3 (B1 keeps its menu role). The HID interface is
     always in the descriptor; it only sends reports in this mode.
+- **Power (v2)**: the nPM1300 is driven end-to-end — input limit follows the
+  USB-C CC advertisement (500 mA on PC ports, 1500 mA on real chargers,
+  re-applied instantly on replug via the PMIC's IRQ line on PA04), charging
+  400/800 mA to 4.10 V under an 80/70 °C die thermostat, live battery
+  current on the Battery screen, a drawn SoC gauge on the clock face
+  (ADR-0014/0016), and a low-battery policy: ship mode below 3.40 V (never
+  during an alarm), fullscreen LOW BATTERY on a too-early wake, manual
+  Shutdown in the menu — BUTTON1 or USB wakes it, the RTC keeps time
+  throughout.
 - **Tune upload**: the QSPI flash appears as a **USB flash drive** (`TUNES`) —
   drag & drop `.wav` files (PCM, 8/16-bit, mono/stereo, 8–48 kHz).
 
@@ -293,7 +302,8 @@ normal build — zero production-flash cost.
 | `src/AudioEngine.*` | TC2 ISR → DAC0 playback, WAV streaming, melodies, buzzer |
 | `src/TuneStorage.*` | QSPI flash, FAT12 volume, USB mass storage |
 | `src/DisplayST7789.*` | ST7789 driver + LVGL 9 flush (RGB565), bring-up self-test |
-| `src/Ui.*` | LVGL screens: clock, menu, alarm edit, zone, display, tunes, info, sky view, ringing |
+| `src/Ui.*` | LVGL screens: clock, menu, alarm edit, zone, display, tunes, info, sky view, battery, lights, ringing |
+| `src/PmicNPM1300.*` | nPM1300: CC-based input limit, charger, IBAT/SoC, ship mode, IRQ (v2) |
 | `src/Buttons.*` / `src/Leds.*` | Debounced input, LED section patterns |
 | `src/AmpTPA2016.*` / `src/AccelLIS3DH.*` | Amp gain/enable, double-tap-to-snooze |
 | `src/Settings.*` | Persistent settings in internal flash (emulated EEPROM) |

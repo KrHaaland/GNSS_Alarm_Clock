@@ -20,3 +20,4 @@ the decision, and its consequences. Newest last. Format: lightweight MADR.
 | [0013](0013-dma-paced-dac-audio.md) | DMA-paced DAC audio playback | Accepted |
 | [0014](0014-npm1300-power-management.md) | v2 power management: nPM1300 strategy | Accepted |
 | [0015](0015-j20-default-swd-flashing.md) | SAMD51J20A default target; SWD-first flashing | Accepted |
+| [0016](0016-soc-estimate-and-gauge.md) | Battery SoC: measured-only estimate, approximate gauge | Accepted |
