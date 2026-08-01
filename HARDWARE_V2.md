@@ -208,6 +208,33 @@ remain unrouted** (v1 findings persist). V_BCKP not battery-backed (above).
 - nPM1300 GPIO1-4 and LED0-2 pads unconnected; GPIO0 -> PA04 (candidate:
   configure as charge-status output so FW can read charging without I2C).
 
+## Next board revision (v3) checklist
+
+Collected findings from the v2 bring-up, in rough priority order:
+
+- [ ] **R68: amp ~SD pull-up → pull-DOWN.** Today the TPA2016 is enabled
+      through the whole bootloader phase (~1 s) before firmware can kill
+      it: wastes 5–15 mA in the battery-less boot window and audibly
+      amplifies the undriven DAC node (boot noise, user-confirmed).
+      Pull-down = off until firmware enables.
+- [ ] **L86 load switch** (enable in front of its 3.3 V): the module is
+      the largest uncontrollable boot-window load (~100 mA acquisition
+      bursts) — firmware can only hold it in reset today.
+- [ ] **L86 V_BCKP → VBAT** (carried over from v1 review #10): GNSS
+      cold-starts after every full power-off; battery-backing it gives
+      warm starts. Route 1PPS to a spare GPIO while at it.
+- [ ] **LIS3DH SA0 strap**: R18 (10k pulldown) is not effective on the
+      built board (chip answers 0x19, not 0x18) — inspect/repair the
+      strap or route it harder. FW probes both addresses regardless.
+- [ ] **Schematic symbol tidy-up**: U18 says J19A (fitted: J20A), U8 says
+      MX25L3233F with Value "25Q128" (correct part: W25Q128**JV**SIQ 3 V —
+      the FW suffix cost a bricked-storage detour).
+- [ ] **Display BL strap**: specify/verify pull-DOWN modules only (a
+      pull-up module burns the backlight through the bootloader phase and
+      boot-loops a battery-less board).
+- [ ] Optional: inrush limiting on the panel rail; keep the nPM1300
+      GPIO0→PA04 IRQ line (it earned its keep).
+
 ## Firmware consequences (status)
 
 - [x] `pmic_begin()` raises VBUS ILIM at every boot + configures charger
