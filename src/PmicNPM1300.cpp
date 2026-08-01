@@ -71,14 +71,15 @@
 #define NPM_CHARGE_MA_HIPOWER 800
 
 // Die-temp charge throttle (linear charger burns (VSYS-VBAT)*I in the die):
-// pause charging at 70 C, resume at 60 C (chip defaults: 110/100; tuned
-// 55/45 -> 65/55 -> 70/60 across bench sessions as real charge rates grew
-// to 800 mA). Thermostat behavior is intended: past the limit the
+// pause charging at 80 C, resume at 70 C (chip defaults: 110/100; bench-
+// tuned upward 55/45 -> 80/70 as real charge rates grew to 800 mA — the
+// case stays barely warm, confirming a healthy die-to-case gradient).
+// Thermostat behavior is intended: past the limit the
 // enclosure cool ("paused (hot)" + die temp are live on the Battery
 // screen). Same encoding as the die-temp ADC readout:
 // K = (394670 - T_mdegC) / 792.6.
-#define NPM_DIETEMP_STOP_C 70
-#define NPM_DIETEMP_RESUME_C 60
+#define NPM_DIETEMP_STOP_C 80
+#define NPM_DIETEMP_RESUME_C 70
 #define NPM_DIETEMP_CODE(tC) ((uint16_t)((394670L - (tC)*1000L) * 10 / 7926))
 #define NPM_VTERM_MV 4100
 // BCHGVTERM: index 4 = 4.00 V, 50 mV steps (4.10 V -> 6)
