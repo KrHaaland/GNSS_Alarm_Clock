@@ -12,9 +12,10 @@ what changed most recently, and the open items — hardware and firmware.
 
 ## 1. Overall status
 
-**Firmware is feature-complete and running on hardware.** Every subsystem is
-implemented and exercised on the bench. The one blocker is a **hardware** fault
-on the RTC (below); it does not stop the clock from working off GNSS.
+**Firmware is feature-complete — release v1.0.0 — and running on the v2
+board.** Every subsystem is implemented and bench-verified. Open hardware
+items are parts in the mail (L86 module, 3 V QSPI flash, pull-down display);
+none stop daily use — the clock runs off the battery-backed RTC.
 
 | Subsystem | State | Notes |
 |---|---|---|
@@ -25,7 +26,7 @@ on the RTC (below); it does not stop the clock from working off GNSS.
 | RTC (RV-3028) | ✅ Working | U5 hand-soldered onto the prototype; ACKs at 0x52, settings EEPROM verified |
 | Alarms + snooze | ✅ Implemented | Verify ring/re-ring/tap on hardware (§4) |
 | Audio (DAC→TPA2016) | ✅ Working | WAV + 3 melodies, digital + amp volume |
-| LEDs (3 sections) | ✅ Working | Chase/blink from supercap rail |
+| LEDs (3 sections) | ✅ Working | Chase/blink; v2: +5 V boost rail (battery-capable), v1: supercap rail |
 | Tunes over USB | ⏳ Awaiting part | v2's U8 is a 1.8 V W25Q128FW (wrong variant) — storage disabled until a JVSIQ is fitted; melodies work |
 | Settings persistence | ✅ Working | RV-3028 user EEPROM (39 B packed) — survives reboot **and reflash** (verified) |
 | UI (9 screens) | ✅ Working | 4-button nav, true-black theme, starry-night option |
