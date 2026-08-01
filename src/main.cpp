@@ -135,6 +135,14 @@ void setup() {
   // no enable pin, and bursts ~100 mA acquiring) and force the amp off
   // (R68 pulls TPA2016 ~SD high = ON by default). The UF2 bootloader phase
   // remains unprotected — a custom bootloader is the full fix.
+  // Core buck regulator: the Arduino core defaults to the LDO, but the
+  // board carries the VSW inductor (L4), so switch VDDCORE to the internal
+  // buck — saves ~4-6 mA at 3.3 V continuously (and trims the MCU's draw
+  // inside the PMIC's 100 mA power-up window as a bonus).
+  SUPC->VREG.bit.SEL = 1;
+  while (!SUPC->STATUS.bit.VREGRDY) {
+  }
+
   portb_output(GNSS_RESET_PORTPIN, false); // L86 core stopped
   pinMode(PIN_AMP_SHUTDOWN, OUTPUT);
   digitalWrite(PIN_AMP_SHUTDOWN, LOW); // amp off

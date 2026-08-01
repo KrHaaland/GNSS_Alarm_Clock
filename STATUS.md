@@ -44,6 +44,8 @@ on the RTC (below); it does not stop the clock from working off GNSS.
   (L86 reset, amp off, backlight low + soft-start ramp).
 - **Battery UI**: SoC% + level-mirroring battery icon + charge bolt on the
   clock face; "Battery" menu screen with live VBAT/state/die-temp.
+- **VDDCORE on the internal buck** (`SUPC->VREG.SEL=1`, board has the L4
+  inductor): ~4-6 mA saved continuously vs the core's default LDO.
 - **Bench findings, all diagnosed on-board**: LIS3DH cold joint (answers at
   0x19 — SA0 strap not effective; FW probes both addresses), L86 cold VCC
   joint (reflowed; **module now failing after 4-5 prototype cycles — trickle

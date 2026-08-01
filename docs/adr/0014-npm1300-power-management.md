@@ -36,7 +36,13 @@ every VBUS plug) and its charger **disabled** until the host configures it.
    `pmic_soc_percent()` — one shared implementation for the clock-face
    battery row and the Battery screen. Reads high while charging; good
    enough for a status glance, no fuel-gauge pretensions.
-5. **Battery-less boot is out of scope on USB-A**: the UF2 bootloader phase
+5. **MCU core runs on the internal buck regulator** (`SUPC->VREG.SEL=1`,
+   first instruction in `setup()`): the Arduino core defaults to the LDO,
+   but the board carries the VSW inductor (L4). Saves ~4–6 mA at 3.3 V
+   continuously and trims the MCU's draw inside the 100 mA power-up
+   window; becomes proportionally more valuable when a sleep/night mode
+   is introduced.
+6. **Battery-less boot is out of scope on USB-A**: the UF2 bootloader phase
    (~0.5–1 s) runs before any application code, inside the 100 mA window,
    with the un-clampable base load (MCU + L86 + pulled-on amp + panel) at
    ~100–120 mA. Remedies, in order of practicality: keep a battery fitted

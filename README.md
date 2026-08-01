@@ -5,7 +5,8 @@ compatible), designed in `HARDWARE/` (KiCad). Two board revisions share one
 firmware:
 
 - **v2 (current)** — SAMD51J20A, **nPM1300 PMIC** with Li-ion charging and
-  USB-C, LM3671 3.3 V + TPS61023 5 V boost, battery-backed RTC. See
+  USB-C, LM3671 3.3 V + TPS61023 5 V boost, battery-backed RTC, MCU core on
+  its internal buck regulator. See
   [`HARDWARE_V2.md`](HARDWARE_V2.md) and [ADR-0014](docs/adr/0014-npm1300-power-management.md)/[0015](docs/adr/0015-j20-default-swd-flashing.md).
   Default build: `metro_m4_j20`.
 - **v1 (prototype)** — SAMD51J19A, LTC3226 + supercaps (design in

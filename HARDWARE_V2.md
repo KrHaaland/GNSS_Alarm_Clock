@@ -23,6 +23,9 @@ USB-C (J1, CC1/CC2 -> PMIC)          Li-ion (J7, 2-pin JST-PH)
 
 - **The nPM1300's bucks are unused** (VOUT1/VOUT2/SW unconnected): the PMIC
   does charging, power path and USB-C only; regulation is external.
+- **The MCU's core (VDDCORE) runs on its internal buck** via inductor L4
+  (firmware selects it — the Arduino core defaults to the lossier LDO);
+  ~4–6 mA saved at 3.3 V (ADR-0014).
 - **VBUS input current limit resets to 100 mA on every VBUS plug/reset** —
   `pmic_begin()` must raise it to 500 mA early in every boot, or any LED
   load browns out the board. The 500 mA limit is the hard USB-port
