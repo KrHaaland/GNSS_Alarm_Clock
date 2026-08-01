@@ -27,6 +27,9 @@
 // effectively bypassed. 10 kOhm is the type we must tell the ADC about.
 #define NPM_ADCNTCRSEL 0x050A // 1 = 10k NTC
 
+// SHIP group (base 0x0B)
+#define NPM_TASKENTERSHIPMODE 0x0B02 // battery cut from VSYS; SHPHLD/USB wakes
+
 // ADC group (base 0x05)
 #define NPM_TASKVBATMEASURE 0x0500
 #define NPM_TASKTEMPMEASURE 0x0502 // die temperature
@@ -115,6 +118,14 @@ void pmic_begin() {
   npm_write(NPM_DIETEMPRESUMELSB, (uint8_t)(kResume & 3));
   npm_write(NPM_BCHGENABLESET, 1);
   npm_write(NPM_ADCIBATMEASEN, 1); // piggyback IBAT on every VBAT measurement
+}
+
+void pmic_enter_ship_mode() {
+  if (!s_present)
+    return;
+  npm_write(NPM_TASKENTERSHIPMODE, 1);
+  for (;;) { // with VBUS absent the power vanishes "immediately" (datasheet)
+  }
 }
 
 bool pmic_present() { return s_present; }

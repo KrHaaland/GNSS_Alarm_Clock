@@ -48,6 +48,7 @@ Dropdown lists open as a full-screen overlay with the current choice centered.
 | Sky view | Live satellite map: left a **polar plot** (center = straight up, outer ring = horizon, N = north; dot color green/yellow/red/grey = signal strength, border white = GPS / cyan = GLONASS), right **SNR bars** for the strongest 12 with PRN numbers (65–96 = GLONASS). Updates every ~5 s — walk the clock around to find the best indoor reception spot. Works without a fix. |
 | Tap snooze | Toggle double-tap-to-snooze. |
 | Mode | Cycles the main screen: **Alarm clock → Speedometer → Altimeter → Game mode**. |
+| Shutdown | (v2, battery only) Confirm with OK → the PMIC cuts the battery (<500 nA); the RTC keeps time. **B1 or a USB plug wakes it.** On USB power it asks you to unplug instead. |
 | Back | To the clock. |
 
 ## Alarms

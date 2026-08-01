@@ -218,6 +218,30 @@ void setup() {
   clock_begin();
 
   display_init();
+
+  // Low-battery boot gate: woken on battery with the cell still under
+  // 3.45 V (hysteresis above the 3.40 V runtime cutoff), we say so for 4 s
+  // and return to ship mode. A connected charger always allows boot.
+  if (pmic_present()) {
+    PmicStatus st;
+    if (pmic_read_status(st) && !st.vbusPresent &&
+        st.vbatMv < PMIC_VBAT_BOOT_MIN_MV) {
+      lv_obj_t *scr = lv_screen_active();
+      lv_obj_set_style_bg_color(scr, lv_color_black(), 0);
+      lv_obj_t *l = lv_label_create(scr);
+      lv_obj_set_style_text_font(l, &lv_font_montserrat_20, 0);
+      lv_obj_set_style_text_color(l, lv_color_white(), 0);
+      lv_label_set_text_static(l, "LOW BATTERY");
+      lv_obj_center(l);
+      uint32_t t0 = millis();
+      while (millis() - t0 < 4000) {
+        lv_timer_handler();
+        delay(5);
+      }
+      pmic_enter_ship_mode(); // does not return (VBUS is absent here)
+    }
+  }
+
   display_set_contrast(settings().brightness);
   ui_begin();
 
@@ -230,6 +254,30 @@ void setup() {
 }
 
 void loop() {
+  // Low-battery cutoff (battery operation only): three consecutive 10 s
+  // readings under 3.40 V -> ship mode, so the cell never grinds through
+  // the brownout-loop zone below the LM3671's dropout. BUTTON1 or a USB
+  // plug wakes the PMIC; the RTC keeps time throughout (VBACKUP on VBAT).
+  // The check pauses whenever an alarm is Ringing OR Snoozed: the LED show
+  // + speaker sag VBAT 50-100 mV (cell IR), which would false-trigger the
+  // cutoff mid-alarm — and a shutdown while snoozed would kill the re-ring.
+  // Waking someone up beats saving the last percent of a battery.
+  static uint32_t s_batChkMs;
+  static uint8_t s_batLowCount;
+  if (pmic_present() && (uint32_t)(millis() - s_batChkMs) >= 10000) {
+    s_batChkMs = millis();
+    PmicStatus st;
+    if (pmic_read_status(st)) {
+      bool alarmActive = alarm_state() != AlarmState::Idle;
+      if (!st.vbusPresent && !alarmActive && st.vbatMv < PMIC_VBAT_SHIP_MV) {
+        if (++s_batLowCount >= 3)
+          pmic_enter_ship_mode(); // does not return
+      } else {
+        s_batLowCount = 0;
+      }
+    }
+  }
+
   // Inputs & housekeeping
   buttons_task();
   accel_task();

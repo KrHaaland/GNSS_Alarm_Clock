@@ -104,7 +104,8 @@ static void stars_twinkle() { // one star flips brightness per UI tick
 }
 
 // Menu
-static lv_obj_t *s_fMenu[11];
+static lv_obj_t *s_fMenu[12];
+static bool s_shutdownArmed; // Shutdown chosen; next B4 while msgbox = confirm
 static lv_obj_t *s_tapLabel;  // "Tap snooze: On/Off" toggle item label
 static lv_obj_t *s_modeLabel; // "Mode: ..." cycle item label
 
@@ -612,12 +613,47 @@ static void make_clock() {
   refresh_clock(true);
 }
 
+// --------------------------------------------------------------- Shutdown ---
+// Manual ship-mode entry from the menu: <500 nA, battery cut from VSYS, the
+// RTC keeps time on VBAT. Wake = BUTTON1 (SHPHLD) or USB plug.
+static void shutdown_execute() {
+  preview_stop();
+  lv_obj_t *scr = lv_obj_create(NULL);
+  lv_obj_set_style_bg_color(scr, lv_color_black(), 0);
+  lv_obj_t *l = lv_label_create(scr);
+  lv_obj_set_style_text_font(l, &lv_font_montserrat_20, 0);
+  lv_obj_set_style_text_color(l, lv_color_white(), 0);
+  lv_label_set_text_static(l, "Shutting down...");
+  lv_obj_center(l);
+  lv_screen_load(scr);
+  uint32_t t0 = millis();
+  while (millis() - t0 < 1200) {
+    lv_timer_handler();
+    delay(5);
+  }
+  pmic_enter_ship_mode(); // no return on battery power
+}
+
+static void shutdown_request() {
+  if (!pmic_present()) { // v1 board: no PMIC, nothing to switch off with
+    show_msgbox("Shutdown", "Not available on this board.");
+    return;
+  }
+  PmicStatus st;
+  if (pmic_read_status(st) && st.vbusPresent) {
+    show_msgbox("Shutdown", "Running on USB power -\nunplug to power off.");
+    return;
+  }
+  s_shutdownArmed = true; // resolved by the msgbox key handler
+  show_msgbox("Shut down?", "OK = power off\nother key = cancel\n(B1 or USB wakes it)");
+}
+
 // ------------------------------------------------------------- Menu scr ---
 enum : uint8_t {
   MENU_ALARM1, MENU_ALARM2, MENU_TZ, MENU_DISPLAY, MENU_TUNES, MENU_SYSINFO,
-  MENU_SKY, MENU_PMIC, MENU_TAPSNOOZE, MENU_MODE, MENU_BACK
+  MENU_SKY, MENU_PMIC, MENU_TAPSNOOZE, MENU_MODE, MENU_SHUTDOWN, MENU_BACK
 };
-#define MENU_COUNT 11
+#define MENU_COUNT 12
 
 static void menu_refresh_tapsnooze() {
   if (s_tapLabel)
@@ -646,6 +682,7 @@ static void menu_btn_cb(lv_event_t *e) {
   case MENU_SYSINFO: load_screen(SCR_SYS); break;
   case MENU_SKY:     load_screen(SCR_SKY); break;
   case MENU_PMIC:    load_screen(SCR_PMIC); break;
+  case MENU_SHUTDOWN: shutdown_request(); break;
   case MENU_TAPSNOOZE: // toggle in place, stay in the menu
     settings().tapSnooze = !settings().tapSnooze;
     settings_save();
@@ -682,7 +719,8 @@ static void make_menu() {
 
   static const char *const NAMES[MENU_COUNT] = {
       "Alarm 1", "Alarm 2",    "Time & zone", "Disp & sound", "Tunes",
-      "System info", "Sky view", "Battery", "Tap snooze", "Mode",    "Back"};
+      "System info", "Sky view", "Battery", "Tap snooze", "Mode",
+      "Shutdown", "Back"};
   for (uint8_t i = 0; i < MENU_COUNT; i++)
     s_fMenu[i] = list_add_item(list, NULL, NAMES[i], menu_btn_cb, i);
 
@@ -1650,8 +1688,12 @@ void ui_handle_event(const ButtonEvent &ev) {
   if (s_screen == SCR_RING)
     return; // main.cpp intercepts while ringing; ignore stragglers
 
-  if (s_msgbox) { // modal: any press dismisses
+  if (s_msgbox) { // modal: any press dismisses (B4 confirms an armed action)
+    bool confirmed = s_shutdownArmed && ev.id == BtnId::B4;
+    s_shutdownArmed = false;
     close_msgbox();
+    if (confirmed)
+      shutdown_execute(); // no return
     return;
   }
 

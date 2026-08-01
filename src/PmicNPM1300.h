@@ -19,7 +19,16 @@ struct PmicStatus {
   uint8_t chargeStatus; // raw BCHGCHARGESTATUS (see pmic_charge_text)
 };
 
+// Low-battery policy thresholds (only enforced when VBUS is absent — on a
+// connected charger the clock always boots and runs):
+#define PMIC_VBAT_SHIP_MV 3400     // runtime cutoff -> ship mode
+#define PMIC_VBAT_BOOT_MIN_MV 3450 // boot gate (hysteresis above cutoff)
+
 void pmic_begin();    // detect; raise VBUS limit to 500 mA; start charger
+// Cut the battery from VSYS (<500 nA). Wake: BUTTON1 (SHPHLD) or USB plug.
+// The RTC keeps time through this (its VBACKUP sits directly on VBAT).
+// Does not return when VBUS is absent.
+void pmic_enter_ship_mode();
 bool pmic_present();  // true when an nPM1300 ACKed at boot
 bool pmic_vbus_500(); // true when the 500 mA limit was applied OK
 uint16_t pmic_charge_current_ma();     // configured charge current
