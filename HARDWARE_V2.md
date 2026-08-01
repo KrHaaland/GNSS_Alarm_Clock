@@ -27,14 +27,15 @@ USB-C (J1, CC1/CC2 -> PMIC)          Li-ion (J7, 2-pin JST-PH)
   (firmware selects it — the Arduino core defaults to the lossier LDO);
   ~4–6 mA saved at 3.3 V (ADR-0014).
 - **VBUS input current limit resets to 100 mA on every VBUS plug/reset** —
-  `pmic_begin()` must raise it to 500 mA early in every boot, or any LED
-  load browns out the board. The 500 mA limit is the hard USB-port
-  protection; charging + system share it (supplement mode: the battery
-  covers bursts beyond it).
-- Charger config (firmware): 200 mA, terminate 4.10 V (user choice, cell
-  longevity), NTC pin has a fixed 10k to GND (R16) — reads a constant
-  ~25 °C, temperature limits effectively bypassed. No thermistor in the
-  battery (J7 is 2-pin).
+  firmware re-applies it at boot AND on every attach (GPIO0 IRQ), set from
+  the CC advertisement: 500 mA on Default USB/PC ports, 1500 mA on 1.5/3 A
+  sources. Charging + system share the budget (supplement mode: the
+  battery covers bursts beyond it).
+- Charger config (firmware): 400 mA setpoint (the PMIC gives charging
+  whatever remains of the input budget), terminate 4.10 V (user choice,
+  cell longevity), die-temp thermostat 65/55 °C. NTC pin has a fixed 10k
+  to GND (R16) — reads a constant ~25 °C, real temperature limiting is
+  the die thermostat. No thermistor in the battery (J7 is 2-pin).
 - **RTC backup is the battery** (VBAT -> U5.6): time survives power-off as
   long as a battery is fitted. Supercaps and LTC3226 are gone.
 - L86 **V_BCKP is on +3.3V** (U4.5), *not* VBAT — GNSS still cold-starts
