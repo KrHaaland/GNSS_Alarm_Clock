@@ -17,6 +17,8 @@ struct PmicStatus {
   int16_t ibatMa;      // battery current, mA: + charging, - discharging
   int16_t dieTempCx10; // PMIC die temperature, 0.1 C units
   uint8_t chargeStatus; // raw BCHGCHARGESTATUS (see pmic_charge_text)
+  uint8_t socPct;      // tracked SoC: coulomb-counted while charging,
+                       // IR-compensated voltage estimate on battery
 };
 
 // Low-battery policy thresholds (only enforced when VBUS is absent — on a
