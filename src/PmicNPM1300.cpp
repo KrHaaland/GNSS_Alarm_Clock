@@ -182,11 +182,16 @@ uint16_t pmic_vbus_limit_ma() { return s_limitMa; }
 uint16_t pmic_charge_current_ma() { return NPM_CHARGE_MA; }
 uint16_t pmic_vterm_mv() { return NPM_VTERM_MV; }
 
-int pmic_soc_percent(uint16_t vbatMv) {
+int pmic_soc_percent(uint16_t vbatMv, int16_t ibatMa) {
   // Rough SoC from voltage, linear 3.5 V .. the configured termination
-  // voltage. Reads high while charging; good enough for a status glance.
+  // voltage — but IR-COMPENSATED back to open-circuit voltage using the
+  // measured battery current: charging lifts the terminal voltage by
+  // I*R_int (the bare estimate jumped 0->8% the instant the charger was
+  // plugged; that 56 mV lift at ~350 mA calibrated R_int to ~160 mOhm),
+  // and discharge sags it the same way. Signed current handles both.
+  int vOcv = (int)vbatMv - ((int)ibatMa * 160) / 1000;
   int span = (int)NPM_VTERM_MV - 3500;
-  int pct = ((int)vbatMv - 3500) * 100 / (span > 0 ? span : 700);
+  int pct = (vOcv - 3500) * 100 / (span > 0 ? span : 700);
   return pct < 0 ? 0 : pct > 100 ? 100 : pct;
 }
 

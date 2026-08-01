@@ -434,7 +434,7 @@ static void refresh_clock(bool force) {
     if (socPct < 0 || (uint32_t)(millis() - socReadMs) >= 5000) {
       PmicStatus st;
       if (pmic_read_status(st)) {
-        socPct = pmic_soc_percent(st.vbatMv);
+        socPct = pmic_soc_percent(st.vbatMv, st.ibatMa);
         // trickle / CC / CV / recharge all count as "charging"
         socCharging = (st.chargeStatus & 0x3C) != 0;
       }
@@ -1244,7 +1244,7 @@ static void refresh_pmic(bool force) {
   } else if (!pmic_read_status(st)) {
     snprintf(b, sizeof(b), "nPM1300: read error");
   } else {
-    int pct = pmic_soc_percent(st.vbatMv);
+    int pct = pmic_soc_percent(st.vbatMv, st.ibatMa);
     snprintf(b, sizeof(b),
              "USB power: %s (limit %u mA%s)\n"
              "Battery: %u.%02u V  (~%d%% est)\n"

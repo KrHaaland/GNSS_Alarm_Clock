@@ -38,6 +38,12 @@ USB-C (J1, CC1/CC2 -> PMIC)          Li-ion (J7, 2-pin JST-PH)
   the die thermostat. No thermistor in the battery (J7 is 2-pin).
 - **RTC backup is the battery** (VBAT -> U5.6): time survives power-off as
   long as a battery is fitted. Supercaps and LTC3226 are gone.
+- **Battery: LG HG2 18650, 3000 mAh, UNPROTECTED power cell** (20 A rated,
+  ~25 mOhm IR; no PCM — the firmware's 3.40 V ship-mode cutoff IS the
+  protection layer; cell spec floor is 2.5 V). Total battery-path
+  resistance seen from the PMIC's VBAT pin is ~160 mOhm (mostly holder
+  spring contacts + wiring), which is the constant used for the
+  IR-compensated SoC estimate.
 - L86 **V_BCKP is on +3.3V** (U4.5), *not* VBAT — GNSS still cold-starts
   after a full power-off (v1 HW-review #10 persists on v2).
 
