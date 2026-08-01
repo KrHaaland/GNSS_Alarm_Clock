@@ -27,6 +27,8 @@
 #include "Gnss.h"
 #include "PmicNPM1300.h"
 #include "RtcRV3028.h"
+
+LV_IMAGE_DECLARE(img_lowbatt); // src/img_lowbatt.c (128x70, I1, white)
 #include "ClockKeeper.h"
 #include "AlarmManager.h"
 #include "Ui.h"
@@ -228,11 +230,19 @@ void setup() {
         st.vbatMv < PMIC_VBAT_BOOT_MIN_MV) {
       lv_obj_t *scr = lv_screen_active();
       lv_obj_set_style_bg_color(scr, lv_color_black(), 0);
+      // 128x70 battery icon (the user's XBM from an earlier project) on the
+      // left, big red text filling the right side.
+      lv_obj_t *icon = lv_image_create(scr);
+      lv_image_set_src(icon, &img_lowbatt);
+      lv_obj_align(icon, LV_ALIGN_LEFT_MID, 18, 0);
       lv_obj_t *l = lv_label_create(scr);
-      lv_obj_set_style_text_font(l, &lv_font_montserrat_20, 0);
+      // Montserrat 48 costs ~67 KB flash — unreferenced (linker-GC'd) in
+      // the J19 era, cheap on the J20. Two lines fill the 142 px height.
+      lv_obj_set_style_text_font(l, &lv_font_montserrat_48, 0);
       lv_obj_set_style_text_color(l, lv_color_white(), 0);
-      lv_label_set_text_static(l, "LOW BATTERY");
-      lv_obj_center(l);
+      lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
+      lv_label_set_text_static(l, "LOW\nBATTERY");
+      lv_obj_align(l, LV_ALIGN_CENTER, 80, 0); // centered in the right half
       uint32_t t0 = millis();
       while (millis() - t0 < 4000) {
         lv_timer_handler();
