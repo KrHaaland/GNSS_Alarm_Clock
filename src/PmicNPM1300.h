@@ -7,7 +7,7 @@
 // browns out the moment a bigger load (an LED section) switches on. The
 // limit also RESETS to 100 mA on every VBUS replug, so pmic_begin() must run
 // early in every boot. pmic_begin() also configures and enables the Li-ion
-// charger (200 mA, 4.2 V termination — see the .cpp for the reasoning).
+// charger (400/800 mA by CC budget, 4.10 V termination — see the .cpp).
 #pragma once
 #include <Arduino.h>
 
@@ -34,6 +34,9 @@ uint16_t pmic_vbus_limit_ma(); // active input limit (500 or 1500)
 // Service the PMIC's IRQ line (GPIO0 -> PA04, configured in pmic_begin):
 // acks pending events; a VBUS attach re-applies the input-limit config.
 void pmic_handle_irq();
+// Runs pending delayed VBUS reconfigurations (scheduled by the IRQ handler
+// so CC classification gets time to settle). Call every loop.
+void pmic_task();
 // Cut the battery from VSYS (<500 nA). Wake: BUTTON1 (SHPHLD) or USB plug.
 // The RTC keeps time through this (its VBACKUP sits directly on VBAT).
 // Does not return when VBUS is absent.

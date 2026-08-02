@@ -282,6 +282,7 @@ void loop() {
   // resets to 100 mA on every replug.
   if (pmic_present() && digitalRead(PIN_CAPGOOD))
     pmic_handle_irq();
+  pmic_task(); // delayed VBUS reconfigure passes (CC settle + retry)
 
   // The check pauses whenever an alarm is Ringing OR Snoozed: the LED show
   // + speaker sag VBAT 50-100 mV (cell IR), which would false-trigger the

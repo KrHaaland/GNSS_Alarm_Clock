@@ -23,7 +23,12 @@ every VBUS plug) and its charger **disabled** until the host configures it.
    supplement mode lets the battery cover bursts beyond it. Because the
    limit resets to 100 mA on every VBUS attach, the PMIC's **GPIO0 (wired
    to PA04) is configured as an IRQ output** for VBUS events; the main loop
-   services it and re-applies the CC-based limit immediately on replug.
+   services it and re-applies the CC-based limit on replug. The re-apply is
+   **deferred, not immediate**: reconfiguring in the attach IRQ raced the
+   PMIC's own attach sequence (CC still classifying, read-back mismatch —
+   surfaced as "RAISE FAILED" on the Battery screen with the limit stuck
+   low). `pmic_task()` runs a pass ~300 ms after the event and a second at
+   ~1.5 s (late CC settle), retrying every 1.5 s while verification fails.
 2. **Boot-window load clamping**: before the I2C transactions (~2–3 ms),
    firmware's first instructions clamp every reachable load — L86 held in
    reset (it hangs directly on 3.3 V, no enable pin, bursts ~100 mA

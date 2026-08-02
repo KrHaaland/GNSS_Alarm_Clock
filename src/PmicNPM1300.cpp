@@ -88,6 +88,8 @@
 static bool s_present;
 static bool s_limitOk;
 static uint16_t s_limitMa = 500;
+static uint32_t s_reconfAtMs;   // pending delayed reconfigure (0 = none)
+static bool s_reconfSecond;     // a second, late pass is still due
 static uint16_t s_chargeMa = NPM_CHARGE_MA_500BUDGET;
 
 static bool npm_write(uint16_t reg, uint8_t val) {
@@ -179,9 +181,29 @@ void pmic_handle_irq() {
     return;
   int ev = npm_read(NPM_EVENTSVBUSIN0SET);
   npm_write(NPM_EVENTSVBUSIN0CLR, 0xFF); // ack; the GPIO0 line drops
-  if (ev > 0 && (ev & 0x01)) { // VBUS attached
-    delay(20); // let the CC comparators settle before classifying the source
-    pmic_vbus_reconfigure();
+  if (ev > 0 && (ev & 0x01)) {
+    // VBUS attached. Do NOT reconfigure here: the PMIC's CC classification
+    // and register defaults are still settling right after attach —
+    // reconfiguring immediately raced them (CC read as "default" and the
+    // ILIM read-back mismatched: the Battery screen's "RAISE FAILED").
+    // Schedule a pass at +300 ms and a second at +1.5 s (late CC settle);
+    // pmic_task() runs them without blocking the main loop.
+    s_reconfAtMs = millis() + 300;
+    s_reconfSecond = true;
+  }
+}
+
+void pmic_task() {
+  if (!s_present || s_reconfAtMs == 0)
+    return;
+  if ((int32_t)(millis() - s_reconfAtMs) < 0)
+    return;
+  pmic_vbus_reconfigure();
+  if (s_reconfSecond || !s_limitOk) {
+    s_reconfSecond = false;
+    s_reconfAtMs = millis() + 1500; // one more pass (or retry on failure)
+  } else {
+    s_reconfAtMs = 0;
   }
 }
 
