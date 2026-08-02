@@ -22,7 +22,7 @@ none stop daily use — the clock runs off the battery-backed RTC.
 | Display (NV3007) | ✅ Working | 428×142 landscape, vendor-page init, Y+14 offset, 30 MHz mode 0 |
 | GNSS time (L86) | 🔴 Module dying | Works only when heated (4-5 proto cycles); replacement ordered. FW verified OK |
 | Power/charging (v2) | ✅ Working | CC-based 500/1500 mA budget, 400/800 mA charge → 4.10 V, 80/70 °C thermostat, ship-mode low-batt policy (ADR-0014/0016) |
-| Timezone + DST | ✅ Working | Offline coord→POSIX-TZ, persisted to flash |
+| Timezone + DST | ✅ Working | Offline coord→POSIX-TZ, persisted to flash. J20: fine polygon map (404 zones, ~1–2 km borders); J19: coarse |
 | RTC (RV-3028) | ✅ Working | U5 hand-soldered onto the prototype; ACKs at 0x52, settings EEPROM verified |
 | Alarms + snooze | ✅ Implemented | Verify ring/re-ring/tap on hardware (§4) |
 | Audio (DAC→TPA2016) | ✅ Working | WAV + 3 melodies, digital + amp volume |
@@ -253,7 +253,7 @@ See [`HARDWARE_REVIEW.md`](HARDWARE_REVIEW.md). Most relevant:
 
 The v2 board is assembled and every subsystem is bench-verified (see
 `HARDWARE_V2.md` for the full firmware-facing reference). Realized:
-SAMD51J20A, nPM1300 (charger 200 mA → 4.10 V, power path, USB-C CC),
+SAMD51J20A, nPM1300 (charger 400/800 mA → 4.10 V, power path, USB-C CC),
 LM3671 3.3 V + TPS61023 5 V boost (both battery-capable), battery-backed
 RTC, battery icon/SoC in the UI. The escalation buzzer was dropped in
 hardware (PB16 unconnected).
@@ -271,7 +271,6 @@ hardware (PB16 unconnected).
   ILIM write (kills the last battery-less-boot window, ADR-0014/0015).
 - Escalation stage on v2: gate the (nonexistent) buzzer on
   `pmic_present()`, or substitute max-volume + LED blitz.
-- Low-battery behavior (dim / limit alarms / shutdown threshold) — TBD.
 - L86 V_BCKP still on 3.3 V (not battery): GNSS cold-starts after power
   loss — next board spin, along with an L86 load switch and the U8/U18
   schematic symbol tidy-up.

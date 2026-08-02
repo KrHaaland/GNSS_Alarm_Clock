@@ -47,12 +47,14 @@ a 428×142 color TFT driven by four buttons.
   covering every UTC zone worldwide — multi-zone countries split by region, plus
   no-DST exceptions like Arizona / Saskatchewan / Queensland / Kaliningrad;
   borders like US-zones and Afghanistan/Pakistan/India aligned to the real
-  meridians). **Polygon zones** (`src/TimezonePolyData.h`, ~357 zones /
-  ~500 polygons) are checked before the boxes: real IANA timezone borders
-  generated from timezone-boundary-builder data by `tools/gen_tz_polys.py`
-  (tunable resolution/flash budget; enclaves ordered first), refinable by hand
-  in `tools/tz_polygon_editor.html` (map GUI: draw/edit vertices, probe a
-  point, export the header). Anything not inside a polygon or box falls back
+  meridians). **Polygon zones** are checked before the boxes: real IANA
+  timezone borders generated from timezone-boundary-builder data by
+  `tools/gen_tz_polys.py` (tunable resolution/flash budget; enclaves ordered
+  first), refinable by hand in `tools/tz_polygon_editor.html` (map GUI:
+  draw/edit vertices, probe a point, export the header). Two resolutions,
+  picked by flash size: v2/J20 gets the fine map
+  (`src/TimezonePolyDataFine.h`, ~1–2 km borders, 404 zones / 56k vertices,
+  ~250 KB), v1/J19 the coarse one (`src/TimezonePolyData.h`, ~57 KB). Anything not inside a polygon or box falls back
   to a whole-hour longitude estimate, so **every coordinate resolves**. Maps
   the GNSS position to a
   **POSIX TZ string with DST rules** (e.g. Oslo →

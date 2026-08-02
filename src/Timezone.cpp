@@ -460,7 +460,16 @@ struct TzPolyZone {
   const char *posix;
 };
 
+// Two resolutions of the same map: the J20's 1 MB flash affords a much finer
+// trace (--eps 0.015 --min-area 0.005 --max-parts 50 --max-verts 224,
+// ~250 KB, 56k vertex pairs — 86 % of the uint16 index space; --eps 0.01
+// with the same island cutoff overflows it); the J19 keeps the coarse
+// ~57 KB table that fits its 512 KB part.
+#ifdef __SAMD51J20A__
+#include "TimezonePolyDataFine.h"
+#else
 #include "TimezonePolyData.h"
+#endif
 
 static int32_t to_cdeg(float deg) {
   return (int32_t)(deg * 100.0f + (deg >= 0.0f ? 0.5f : -0.5f));

@@ -42,6 +42,19 @@ import sys
 ZONEINFO = "/usr/share/zoneinfo"
 SKIP_PREFIXES = ("Antarctica/", "Etc/")
 SKIP_ZONES = {"Asia/Urumqi"}
+
+# Hand-drawn zones absent from the source data (no IANA zone exists), added
+# on every regeneration. Format matches the collected zones: (area deg^2,
+# name, posix, [ring]) with rings as (lat, lon) centidegree pairs.
+EXTRA_ZONES = [
+    # Bouvetøya: uninhabited Norwegian dependency, UTC+0. Octagon around the
+    # island (~49 km^2); the kZones box in Timezone.cpp still covers the
+    # surrounding waters as fallback.
+    (0.004, "Atlantic/Bouvet", "GMT0", [[
+        (-5439, 338), (-5441, 344), (-5443, 346), (-5446, 344),
+        (-5447, 338), (-5446, 332), (-5443, 330), (-5441, 332),
+    ]]),
+]
 NAME_MAX = 19   # TzResult.name is char[20]
 POSIX_MAX = 47  # TzResult.posix is char[48]
 
@@ -213,6 +226,7 @@ def main():
         else:
             dropped_zones.append(tzid)
 
+    zones.extend(EXTRA_ZONES)
     zones.sort(key=lambda z: (z[0], z[1]))  # smallest first: enclaves win
 
     # ---- emit ---------------------------------------------------------------
