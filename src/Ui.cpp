@@ -1258,6 +1258,17 @@ static void refresh_sysinfo(bool force) {
   char sign = off < 0 ? '-' : '+';
   uint32_t ao = off < 0 ? (uint32_t)-off : (uint32_t)off;
 
+  char rtcSt[20];
+  if (!rtc_present())
+    strcpy(rtcSt, "MISSING");
+  else if (rtc_backup_config() >= 0)
+    snprintf(rtcSt, sizeof(rtcSt), "ok+LSM%s",
+             rtc_lost_power() ? " POR!" : "");
+  else if (rtc_backup_raw() >= 0) // read worked, value wrong: show the byte
+    snprintf(rtcSt, sizeof(rtcSt), "ok BKUP=0x%02X!", rtc_backup_raw());
+  else
+    strcpy(rtcSt, "ok BKUP-RD-FAIL!");
+
   snprintf(b, sizeof(b),
            "Fix %s   Sats %u   HDOP %s\n"
            "NMEA %lu chars\n"
@@ -1275,7 +1286,7 @@ static void refresh_sysinfo(bool force) {
            (unsigned long)gnss_chars_seen(), lat,
            lon, spd, alt, settings().tzName, settings().tzPosix, sign,
            (unsigned long)(ao / 3600), (unsigned long)((ao % 3600) / 60),
-           clock_is_dst() ? " DST" : "", age, rtc_present() ? "ok" : "MISSING",
+           clock_is_dst() ? " DST" : "", age, rtcSt,
            supercaps_ready() ? "ready" : "charging",
            (unsigned)alarm_snoozes_this_week(),
            (unsigned long)settings().snoozeTotal, ampStatus);

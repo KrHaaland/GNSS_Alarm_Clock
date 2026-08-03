@@ -8,6 +8,8 @@
 static RV3028 rtc;
 static bool s_present = false;
 static bool s_lostPower = false; // PORF latched at begin
+static int s_backupCfg = -1;  // last EEPROM 0x37 byte read, -1 = read failed
+static bool s_backupOk = false; // byte verified: BSM=LSM and TCE off
 
 static bool rtc_probe() {
   Wire.beginTransmission((uint8_t)RV3028_ADDR);
@@ -136,8 +138,47 @@ bool rtc_begin() {
   // 24h mode, trickle charger off, Level Switching backup Mode (EEPROM-backed
   // config; writes are skipped by the lib when values already match).
   bool ok = rtc.begin(Wire, true, true, true);
+
+  // 2026-08-02: the RTC lost time when the battery ran flat, so the backup
+  // switchover was NOT in effect despite the begin() above nominally
+  // configuring LSM on every boot. Trust nothing the library returned: read
+  // the actual EEPROM byte back and rewrite until it verifies — BSM must be
+  // LSM (0b11) and the trickle charger off (VBACKUP is the Li-ion cell on
+  // v2; the nPM1300 charges it, not the RTC).
+  const uint8_t bsmLsm = (uint8_t)(0x3u << EEPROMBackup_BSM_SHIFT);
+  const uint8_t tceBit = (uint8_t)(1u << EEPROMBackup_TCE_BIT);
+  for (uint8_t i = 0; i < 3 && !s_backupOk; i++) {
+    if (i) { // previous read bad or failed: rewrite via the lib, then recheck
+      rtc.setBackupSwitchoverMode(3);
+      rtc.disableTrickleCharge();
+      eeprom_wait_ready();
+    }
+    // ReadSingle only reaches the user EEPROM (bench-verified: it fails on
+    // 0x37), so read the config EEPROM the indirect way: a Refresh command
+    // reloads every config RAM mirror from EEPROM, then a plain register
+    // read of 0x37 shows what the EEPROM really holds. This also means a
+    // lib write that only reached the RAM mirror gets reverted here and
+    // correctly fails verification.
+    if (eeprom_set_eerd(true)) {
+      uint8_t ee = 0;
+      bool got = eeprom_wait_ready() &&
+                 write_reg_raw(RV3028_EEPROM_CMD, EEPROMCMD_First) &&
+                 write_reg_raw(RV3028_EEPROM_CMD, EEPROMCMD_Refresh) &&
+                 eeprom_wait_ready() &&
+                 read_reg_raw(EEPROM_Backup_Register, ee);
+      eeprom_set_eerd(false);
+      eeprom_wait_ready();
+      if (got) {
+        s_backupCfg = ee; // keep the raw byte for System info diagnostics
+        s_backupOk = (ee & bsmLsm) == bsmLsm && !(ee & tceBit);
+      }
+    }
+  }
   return ok && s_present;
 }
+
+int rtc_backup_config() { return s_backupOk ? s_backupCfg : -1; }
+int rtc_backup_raw() { return s_backupCfg; }
 
 bool rtc_present() { return s_present; }
 
@@ -171,10 +212,13 @@ bool rtc_set_utc(time_t utc) {
 
 bool rtc_lost_power() {
   bool r = s_lostPower;
-  s_lostPower = false;
+  // Sticky for the whole session: this is diagnostic evidence (shown on
+  // System info), not a one-shot event — a POR means the displayed time
+  // cannot be trusted until a GNSS sync, regardless of who asked first.
   // Also catch a PORF raised after begin (backup drained while running).
   if (s_present && rtc.readBit(RV3028_STATUS, STATUS_PORF)) {
     r = true;
+    s_lostPower = true;
     rtc.clearBit(RV3028_STATUS, STATUS_PORF);
   }
   return r;

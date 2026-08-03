@@ -23,7 +23,7 @@ none stop daily use — the clock runs off the battery-backed RTC.
 | GNSS time (L86) | 🔴 Module dying | Works only when heated (4-5 proto cycles); replacement ordered. FW verified OK |
 | Power/charging (v2) | ✅ Working | CC-based 500/1500 mA budget, 400/800 mA charge → 4.10 V, 80/70 °C thermostat, ship-mode low-batt policy (ADR-0014/0016) |
 | Timezone + DST | ✅ Working | Offline coord→POSIX-TZ, persisted to flash. J20: fine polygon map (404 zones, ~1–2 km borders); J19: coarse |
-| RTC (RV-3028) | ✅ Working | U5 hand-soldered onto the prototype; ACKs at 0x52, settings EEPROM verified |
+| RTC (RV-3028) | ✅ Working | U5 hand-soldered onto the prototype; ACKs at 0x52, settings EEPROM verified. Backup switchover (LSM) EEPROM-verified at every boot — factory-fresh chips ship with it OFF |
 | Alarms + snooze | ✅ Implemented | Verify ring/re-ring/tap on hardware (§4) |
 | Audio (DAC→TPA2016) | ✅ Working | WAV + 3 melodies, digital + amp volume |
 | LEDs (3 sections) | ✅ Working | Chase/blink; v2: +5 V boost rail (battery-capable), v1: supercap rail |

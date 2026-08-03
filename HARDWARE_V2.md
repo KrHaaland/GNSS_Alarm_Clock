@@ -230,6 +230,12 @@ Collected findings from the v2 bring-up, in rough priority order:
 - [ ] **L86 V_BCKP → VBAT** (carried over from v1 review #10): GNSS
       cold-starts after every full power-off; battery-backing it gives
       warm starts. Route 1PPS to a spare GPIO while at it.
+- [ ] **VBACKUP buffer cap (U5.6)**: ~100 nF–1 µF from the RV-3028's
+      VBACKUP pin to GND. In ship mode the RTC runs from VBACKUP alone
+      (nA domain, high impedance) and a hot-plug ground transient — e.g.
+      a floating charger's Y-cap leakage equalizing through the board
+      while SWD pins board GND to PC earth — can POR it and lose the
+      time (observed 2026-08-02). A local cap rides the chip through.
 - [ ] **LIS3DH SA0 strap**: R18 (10k pulldown) is not effective on the
       built board (chip answers 0x19, not 0x18) — inspect/repair the
       strap or route it harder. FW probes both addresses regardless.
