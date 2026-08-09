@@ -1,6 +1,6 @@
 # 0010 — Amp loudness architecture: AGC leveling, limiter as volume
 
-Date: 2026-07-14 · Status: **Accepted**
+Date: 2026-07-14, ceiling re-tuned 2026-08-09 · Status: **Accepted**
 
 ## Context
 The TPA2016D2 was used as "fixed gain + peak limiter"; loudness = the gain
@@ -12,9 +12,13 @@ a gentle volume ramp.
 Enable the chip's **AGC at 1:4 compression** so program material is leveled
 toward the output ceiling. With AGC active the **output limiter level is the
 real volume control**, so:
-- volume 0–10 maps to the limiter level across its FULL range: v1 = −6.5 dBV
-  (~28 mW into 8 Ω) … v10 = +9 dBV (~1.0 W, chip max; the 8 Ω speaker
-  handles it),
+- volume 0–10 maps to the limiter level: v1 = −6.5 dBV (~28 mW into 8 Ω) …
+  v10 = **+7 dBV** (~0.63 W into 8 Ω). The ceiling is deliberately below the
+  chip max (+9 dBV): bench measurement (2026-08-09) showed max volume + LED
+  chase crossing the nPM1300's **1000 mA battery discharge limit** as the
+  AGC wound up — IBATLIM collapses VSYS and resets the device. A USB-only
+  higher ceiling was rejected: the limit applies instantly at unplug while
+  software reacts in ~10–50 ms, an unwinnable race. See ADR-0014,
 - fixed gain stays constant (+6 dB into the AGC),
 - the digital (DAC) volume is pinned high — it would otherwise be undone by
   the AGC,

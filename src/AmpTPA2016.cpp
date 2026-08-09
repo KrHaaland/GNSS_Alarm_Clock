@@ -32,10 +32,19 @@
 // Max AGC gain 30 dB (field = dB-18 = 12), compression ratio 1:4 (10b) to
 // even out differently-mastered WAVs.
 #define AGC2_VALUE 0xC2
-// Volume 1..10 spans the limiter's FULL range: -6.5 dBV (step 0, ~28 mW into
-// the 8 ohm speaker) up to +9 dBV (step 31, ~1.0 W — chip maximum; the
-// speaker is 8 ohm and handles it). ~1.7 dB per volume step; volume 0 = mute.
-#define LIMITER_MAX_STEP 31
+// Volume 1..10 spans -6.5 dBV (step 0, ~28 mW into 8 ohm) up to +7 dBV
+// (step 27, ~0.63 W into 8 ohm); ~1.5 dB per volume step, volume 0 = mute.
+// The ceiling is NOT the chip max (+9 dBV, step 31): bench-measured
+// 2026-08-06 against the nPM1300's 1000 mA battery discharge limit
+// (IBATLIM — exceeding it collapses VSYS and resets the device). At step
+// 31 the total draw (audio + LED chase + system) crossed the limit as the
+// AGC wound up; step 27 swung 500-900 mA in the worst case (ALL LEDs on,
+// bass-heavy tune, 8 ohm series speaker pair). A USB-only higher ceiling
+// was considered and rejected: IBATLIM applies instantly at unplug while
+// software reacts in ~10-50 ms — an unwinnable race at full blast.
+// Re-tune this if the speaker configuration changes (lower impedance =
+// more current at the same limiter voltage).
+#define LIMITER_MAX_STEP 27
 // Noise-gate threshold bits (01 = 4 mV).
 #define NG_BITS 0x20
 
