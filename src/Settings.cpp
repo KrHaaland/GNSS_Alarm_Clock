@@ -25,8 +25,8 @@
 // --- packed image layout -----------------------------------------------------
 #define PACK_MAGIC0 'G'
 #define PACK_MAGIC1 'C'
-#define PACK_VERSION 3 // v3: per-alarm ramp in the alarm flag bits (b1-2)
-#define PACK_LEN 40           // incl. trailing checksum; <= RTC_USER_EEPROM_SIZE
+#define PACK_VERSION 4 // v4: snoozeTotal u32 -> u24, spare byte dropped
+#define PACK_LEN 38           // incl. trailing checksum; <= RTC_USER_EEPROM_SIZE
 #define EPOCH2020_DAYS 18262u // 2020-01-01 in unix epoch-days (weekStart base)
 
 enum : uint8_t {
@@ -37,13 +37,19 @@ enum : uint8_t {
   OFF_VOLUME, OFF_SNOOZEMIN, OFF_BUZZAFTER, OFF_BRIGHT,
   OFF_DIMTIMEOUT = 13, // u16 seconds
   OFF_DIMBRIGHT = 15,
-  OFF_SNZTOTAL = 16,   // u32
-  OFF_SNZWEEK = 20,    // u16
-  OFF_SNZWEEKSTART = 22, // u16, local epoch-day - EPOCH2020_DAYS
-  OFF_ALARM0 = 24,     // 7 B each: flags,hour,min,mask,melody,hash(u16)
-  OFF_ALARM1 = 31,
-  OFF_RESERVED = 38,   // was the global ramp byte in v2; now spare (0)
-  OFF_CHECKSUM = 39,
+  OFF_SNZTOTAL = 16,   // u24 LE (caps at 16.7M snoozes)
+  OFF_SNZWEEK = 19,    // u16
+  OFF_SNZWEEKSTART = 21, // u16, local epoch-day - EPOCH2020_DAYS
+  OFF_ALARM0 = 23,     // 7 B each: flags,hour,min,mask,melody,hash(u16)
+  OFF_ALARM1 = 30,
+  OFF_CHECKSUM = 37,
+};
+// v3 image (40 B): snoozeTotal was u32 so everything from SNZWEEK on sat one
+// byte later, plus a spare byte before the checksum. LE means the u24 keeps
+// the same three bytes — migration drops the (always 0) MSB and shifts.
+enum : uint8_t {
+  V3_SNZWEEK = 20, V3_ALARM0 = 24, V3_ALARM1 = 31,
+  V3_RESERVED = 38, V3_CHECKSUM = 39, V3_LEN = 40,
 };
 #define V1_LEN 39 // v1 image: 38-byte payload, checksum at offset 38
 // alarm flags byte: b0 enabled, b1-2 gentle-wake ramp index (see kRampSecs),
@@ -85,16 +91,16 @@ static uint16_t tune_hash(const char *name) {
 }
 
 static void put16(uint8_t *b, uint16_t v) { b[0] = v & 0xFF; b[1] = v >> 8; }
-static void put32(uint8_t *b, uint32_t v) {
-  b[0] = v & 0xFF; b[1] = (v >> 8) & 0xFF;
-  b[2] = (v >> 16) & 0xFF; b[3] = v >> 24;
+static void put24(uint8_t *b, uint32_t v) {
+  if (v > 0xFFFFFFul)
+    v = 0xFFFFFFul;
+  b[0] = v & 0xFF; b[1] = (v >> 8) & 0xFF; b[2] = (v >> 16) & 0xFF;
 }
 static uint16_t get16(const uint8_t *b) {
   return (uint16_t)(b[0] | (b[1] << 8));
 }
-static uint32_t get32(const uint8_t *b) {
-  return (uint32_t)b[0] | ((uint32_t)b[1] << 8) | ((uint32_t)b[2] << 16) |
-         ((uint32_t)b[3] << 24);
+static uint32_t get24(const uint8_t *b) {
+  return (uint32_t)b[0] | ((uint32_t)b[1] << 8) | ((uint32_t)b[2] << 16);
 }
 
 static int16_t centideg(float v) {
@@ -129,7 +135,7 @@ static void pack(const Settings &in, uint8_t out[PACK_LEN]) {
   out[OFF_BRIGHT] = in.brightness;
   put16(&out[OFF_DIMTIMEOUT], in.dimTimeoutS);
   out[OFF_DIMBRIGHT] = in.dimBrightness;
-  put32(&out[OFF_SNZTOTAL], in.snoozeTotal);
+  put24(&out[OFF_SNZTOTAL], in.snoozeTotal);
   put16(&out[OFF_SNZWEEK], in.snoozeWeek);
   uint32_t ws = in.snoozeWeekStart;
   ws = (ws > EPOCH2020_DAYS) ? ws - EPOCH2020_DAYS : 0;
@@ -145,7 +151,6 @@ static void pack(const Settings &in, uint8_t out[PACK_LEN]) {
     a[4] = ac.melodyId;
     put16(&a[5], tune_hash(ac.tune));
   }
-  out[OFF_RESERVED] = 0;
   out[OFF_CHECKSUM] = checksum(out, OFF_CHECKSUM);
 }
 
@@ -188,7 +193,7 @@ static void unpack(const uint8_t in[PACK_LEN], Settings &out) {
   out.brightness = in[OFF_BRIGHT];
   out.dimTimeoutS = get16(&in[OFF_DIMTIMEOUT]);
   out.dimBrightness = in[OFF_DIMBRIGHT];
-  out.snoozeTotal = get32(&in[OFF_SNZTOTAL]);
+  out.snoozeTotal = get24(&in[OFF_SNZTOTAL]);
   out.snoozeWeek = get16(&in[OFF_SNZWEEK]);
   out.snoozeWeekStart = EPOCH2020_DAYS + get16(&in[OFF_SNZWEEKSTART]);
   for (uint8_t i = 0; i < NUM_ALARMS; i++) {
@@ -275,41 +280,54 @@ void settings_begin() {
   settings_defaults();
   memset(s_pendingTuneHash, 0, sizeof(s_pendingTuneHash));
 
-  uint8_t img[PACK_LEN];
-  if (!rtc_eeprom_read(0, img, PACK_LEN)) {
+  uint8_t img[V3_LEN]; // big enough for the longer pre-v4 images
+  if (!rtc_eeprom_read(0, img, V3_LEN)) {
     // RTC absent/unreachable: run on defaults, RAM-only (no persistence).
     haveLast = false;
     return;
   }
   bool magicOk = img[OFF_MAGIC0] == PACK_MAGIC0 && img[OFF_MAGIC1] == PACK_MAGIC1;
-  if (magicOk && img[OFF_VERSION] == PACK_VERSION &&
-      img[OFF_CHECKSUM] == checksum(img, OFF_CHECKSUM)) {
-    unpack(img, s);
-    resolve_tunes();
-    memcpy(lastPacked, img, PACK_LEN);
-    haveLast = true;
+  // Pre-v4 images: fix up in place to the v3 byte layout first (the v1/v2
+  // ramp moves), then let the shared v3->v4 shift below bring them current.
+  bool oldLayout = false;
+  if (magicOk && img[OFF_VERSION] == 3 &&
+      img[V3_CHECKSUM] == checksum(img, V3_CHECKSUM)) {
+    oldLayout = true;
   } else if (magicOk && img[OFF_VERSION] == 2 &&
-             img[OFF_CHECKSUM] == checksum(img, OFF_CHECKSUM)) {
+             img[V3_CHECKSUM] == checksum(img, V3_CHECKSUM)) {
     // v2 -> v3: the global ramp byte (old offset 38) moves into each alarm's
-    // flag bits. Copy it to both alarms, then persist as v3.
-    uint8_t rampBits = (uint8_t)(ramp_idx(img[OFF_RESERVED] <= 60
-                                              ? img[OFF_RESERVED] : 30) << 1);
-    img[OFF_ALARM0] = (uint8_t)((img[OFF_ALARM0] & 1) | rampBits);
-    img[OFF_ALARM1] = (uint8_t)((img[OFF_ALARM1] & 1) | rampBits);
-    unpack(img, s);
-    resolve_tunes();
-    haveLast = false;
-    settings_save();
+    // flag bits.
+    uint8_t rampBits = (uint8_t)(ramp_idx(img[V3_RESERVED] <= 60
+                                              ? img[V3_RESERVED] : 30) << 1);
+    img[V3_ALARM0] = (uint8_t)((img[V3_ALARM0] & 1) | rampBits);
+    img[V3_ALARM1] = (uint8_t)((img[V3_ALARM1] & 1) | rampBits);
+    oldLayout = true;
   } else if (magicOk && img[OFF_VERSION] == 1 &&
              img[V1_LEN - 1] == checksum(img, V1_LEN - 1)) {
     // v1 -> v3: no ramp stored anywhere; default 30 s on both alarms.
     uint8_t rampBits = (uint8_t)(ramp_idx(30) << 1);
-    img[OFF_ALARM0] = (uint8_t)((img[OFF_ALARM0] & 1) | rampBits);
-    img[OFF_ALARM1] = (uint8_t)((img[OFF_ALARM1] & 1) | rampBits);
+    img[V3_ALARM0] = (uint8_t)((img[V3_ALARM0] & 1) | rampBits);
+    img[V3_ALARM1] = (uint8_t)((img[V3_ALARM1] & 1) | rampBits);
+    oldLayout = true;
+  }
+
+  if (oldLayout) {
+    // v3 -> v4: snoozeTotal shrinks u32 -> u24. Little-endian means its three
+    // low bytes already sit at OFF_SNZTOTAL; drop the (always 0) MSB by
+    // shifting everything from SNZWEEK through ALARM1 down one byte. The old
+    // spare byte (38) falls off the end. Persisting re-checksums as v4.
+    memmove(&img[OFF_SNZWEEK], &img[V3_SNZWEEK],
+            V3_ALARM1 + 7 - V3_SNZWEEK); // 20..37 -> 19..36
     unpack(img, s);
     resolve_tunes();
     haveLast = false;
     settings_save();
+  } else if (magicOk && img[OFF_VERSION] == PACK_VERSION &&
+             img[OFF_CHECKSUM] == checksum(img, OFF_CHECKSUM)) {
+    unpack(img, s);
+    resolve_tunes();
+    memcpy(lastPacked, img, PACK_LEN);
+    haveLast = true;
   } else {
     // Blank chip / torn write / unknown format: persist the defaults.
     haveLast = false;

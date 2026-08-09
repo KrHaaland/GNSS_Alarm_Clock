@@ -60,9 +60,9 @@ struct Settings {
   uint16_t dimTimeoutS;    // dim display after N s idle, 0 = never
   uint8_t dimBrightness;   // contrast when dimmed
 
-  // Snooze shame counter (appended in v3 — settings_begin() migrates v2
+  // Snooze shame counter (appended in v3 — settings_begin() migrates old
   // blocks in place, so nothing else is reset).
-  uint32_t snoozeTotal;     // all-time snooze count
+  uint32_t snoozeTotal;     // all-time snooze count (stored as u24, caps 16.7M)
   uint16_t snoozeWeek;      // snoozes in the week starting snoozeWeekStart
   uint32_t snoozeWeekStart; // local epoch-day of that week's Monday
 };
