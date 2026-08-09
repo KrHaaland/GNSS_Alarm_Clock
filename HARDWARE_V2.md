@@ -13,6 +13,10 @@ USB-C (J1, CC1/CC2 -> PMIC)          Li-ion (J7, 2-pin JST-PH)
       VUSB ──> nPM1300 (U3, I2C 0x6B) <── VBAT ──> RV-3028 VBACKUP (U5.6)
                    |  charger + power path + USB-C detection
                  VSYS  (= VBUS when present, else battery, ideal diode)
+                   |   BATTERY BUDGET: nPM1300 IBATLIM caps discharge at
+                   |   1000 mA — exceeding it drops VSYS below VSYSPOF and
+                   |   RESETS the board. On battery, everything below must
+                   |   fit in ~3.5 W. (On USB, VBUS adds its 0.5/1.5 A.)
                    ├──> LM3671 (U14)  -> +3.3V   (EN: R13 100k -> VSYS, always on)
                    └──> TPS61023 (U6) -> +5V     (EN: R4 100k -> VSYS, always on;
                         FB R5 732k / R12 100k -> ~5.0 V, boosts from battery too)

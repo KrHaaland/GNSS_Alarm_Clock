@@ -95,7 +95,10 @@ a 428×142 color TFT driven by four buttons.
   (ADR-0014/0016), and a low-battery policy: ship mode below 3.40 V (never
   during an alarm), fullscreen LOW BATTERY on a too-early wake, manual
   Shutdown in the menu — BUTTON1 or USB wakes it, the RTC keeps time
-  throughout.
+  throughout. The volume ceiling is bench-tuned to the PMIC's **1000 mA
+  battery discharge limit (IBATLIM)** — exceeding it collapses VSYS and
+  resets the device, so max volume (+7 dBV limiter) + LED chase stays under
+  it with margin (ADR-0010/0014).
 - **Tune upload**: the QSPI flash appears as a **USB flash drive** (`TUNES`) —
   drag & drop `.wav` files (PCM, 8/16-bit, mono/stereo, 8–48 kHz).
 
@@ -112,8 +115,8 @@ driven **landscape 428×142**. Driver: [`src/DisplayNV3007.cpp`](src/DisplayNV30
   Sequence cross-verified against five independent drivers (Arduino_GFX, LVGL
   lv_nv3007, vendor reference, STM32 + esp_lcd ports).
 - GRAM is **168×428**; the 142 visible columns are inset 12/14. Landscape
-  (`MADCTL 0x60`) puts the inset on RASET: **`NV_Y_OFFSET 14`** (flipped 0xA0
-  → 12). Inversion OFF.
+  (`MADCTL 0xA0`, flipped 180° to match the enclosure mounting) puts the
+  inset on RASET: **`NV_Y_OFFSET 12`** (unflipped 0x60 → 14). Inversion OFF.
 - **SPI mode 0** (an NV3007 quirk — ST7789 setups often run mode 3), **30 MHz**
   (SERCOM2 re-clocked from the 120 MHz GCLK0 — the default 48 MHz source
   quantizes to 24 MHz max). Pixels stream via an **async DMA flush with double
@@ -144,7 +147,7 @@ emulation sat inside the app image and was wiped on every update), takes
 BOM** (it still ACKs at 0x50 on v1 boards, unused). Verified on hardware:
 settings survive both power cycles and reflashes.
 
-### RTC user-EEPROM memory map (39 of 43 bytes)
+### RTC user-EEPROM memory map (38 of 43 bytes)
 
 Space is won by not storing derived data: TZ strings re-derive at boot from
 the stored position (or the manual GMT-ladder index), and alarm tune filenames
@@ -154,7 +157,7 @@ are stored as 16-bit FNV-1a hashes re-matched against the TUNES directory
 | Addr | Size | Field |
 |---|---|---|
 | `0x00` | 2 | Magic `'G' 'C'` |
-| `0x02` | 1 | Pack-format version (3) |
+| `0x02` | 1 | Pack-format version (4) — older blocks (v1–v3) migrate in place at boot, nothing is reset |
 | `0x03` | 1 | Flags: b0 tzAuto, b1 tapSnooze, b2 use24h, b3 havePosition, b4–5 mode, b6 starryNight |
 | `0x04` | 2 | Latitude, centidegrees (i16) |
 | `0x06` | 2 | Longitude, centidegrees (i16) |
@@ -165,14 +168,13 @@ are stored as 16-bit FNV-1a hashes re-matched against the TUNES directory
 | `0x0C` | 1 | Brightness |
 | `0x0D` | 2 | Dim timeout, seconds (u16) |
 | `0x0F` | 1 | Dim brightness |
-| `0x10` | 4 | Snooze counter, all time (u32) |
-| `0x14` | 2 | Snooze counter, this week (u16) |
-| `0x16` | 2 | Week start, local epoch-day − 18262 (u16, base 2020-01-01) |
-| `0x18` | 7 | Alarm 1: flags (b0 enabled, b1–2 ramp Off/15/30/60 s, b3–4 random ±0/1/5/9 min), hour, minute, daysMask, melodyId, tuneHash (u16) |
-| `0x1F` | 7 | Alarm 2: same layout |
-| `0x26` | 1 | Reserved (was the global ramp byte in v2) |
-| `0x27` | 1 | Checksum (block sums to `0xFF`) — **written last**, so a torn write invalidates the image |
-| `0x28` | 3 | Free / future |
+| `0x10` | 3 | Snooze counter, all time (u24, caps at 16.7 M) |
+| `0x13` | 2 | Snooze counter, this week (u16) |
+| `0x15` | 2 | Week start, local epoch-day − 18262 (u16, base 2020-01-01) |
+| `0x17` | 7 | Alarm 1: flags (b0 enabled, b1–2 ramp Off/15/30/60 s, b3–4 random ±0/1/5/9 min), hour, minute, daysMask, melodyId, tuneHash (u16) |
+| `0x1E` | 7 | Alarm 2: same layout |
+| `0x25` | 1 | Checksum (block sums to `0xFF`) — **written last**, so a torn write invalidates the image |
+| `0x26` | 5 | Free / future |
 
 > **RV-3028 EEPROM quirks (bench-found, handled in `RtcRV3028.cpp`):** the
 > chip **NACKs all I²C** while its EEPROM engine runs — both during the
@@ -228,15 +230,19 @@ uses a **SAMD51J20A** (1 MB flash, ~48% — same pinout). Pick the build in
 pio run -e metro_m4_j20      # J20 build; flash .pio/build/metro_m4_j20/firmware.bin @0x4000
 ```
 
-> **J20 bootloader note:** the stock Metro M4 UF2 bootloader is built for the
-> J19 — on a J20 board flash the app **over SWD** (same `.bin @ 0x4000` recipe).
-> For UF2 drag-and-drop on the J20, build
-> [uf2-samdx1](https://github.com/adafruit/uf2-samdx1) for the SAMD51J20A once.
+> **J20 + stock bootloader:** the Metro M4 UF2 bootloader is built for the
+> J19A and reads the "stay in bootloader" magic at *its* RAM top
+> (0x2002FFFC); a J20 app writes it at 0x2003FFFC, so the 1200-baud touch
+> used to land straight back in the app. `tools/patch_tinyusb_power.py`
+> patches the core's `initiateReset()` to write **both** addresses — USB
+> uploads now work on the J20 with the stock bootloader.
 
 Two flashing paths:
 
-**A) UF2 bootloader (normal, no tools):** double-tap RESET to mount the
-`METROM4BOOT` drive, then drag `firmware.uf2` onto it.
+**A) USB (normal, no tools):** `pio run -e metro_m4_j20 -t upload` —
+1200-baud touch into the bootloader, bossac writes + verifies at 0x4000
+(~4 s). Manual alternative: double-tap RESET to mount the `METROM4BOOT`
+drive and drag `firmware.uf2` onto it.
 
 **B) SWD via Atmel-ICE (used in development):**
 
@@ -252,7 +258,11 @@ openocd -c "adapter driver cmsis-dap" -c "transport select swd" \
 > ⚠️ **Never flash the `.elf` over SWD.** Its LOAD segment sits at address `0x0`
 > and will overwrite the UF2 bootloader at flash start, bricking drag-and-drop
 > programming (recovery = re-flash the bootloader). Always flash the **`.bin` at
-> `0x4000`**.
+> `0x4000`**. The bootloader region is additionally guarded by the
+> **BOOTPROT fuse (16 KB)** since a brownout-induced wild NVMCTRL write once
+> zeroed the bootloader's vector table (see `docs/sessions/`); clear it with
+> `atsame5 bootloader 0` before intentional bootloader updates, restore with
+> `atsame5 bootloader 16384`.
 
 `pio device monitor -b 115200` opens the USB-CDC console.
 
@@ -310,7 +320,7 @@ normal build — zero production-flash cost.
 | `src/PmicNPM1300.*` | nPM1300: CC-based input limit, charger, IBAT/SoC, ship mode, IRQ (v2) |
 | `src/Buttons.*` / `src/Leds.*` | Debounced input, LED section patterns |
 | `src/AmpTPA2016.*` / `src/AccelLIS3DH.*` | Amp gain/enable, double-tap-to-snooze |
-| `src/Settings.*` | Persistent settings in internal flash (emulated EEPROM) |
+| `src/Settings.*` | Persistent settings packed into the RTC's user EEPROM (v4, 38 B) |
 | `src/SimConsole.*` | Serial "virtual GPS" console — `env:sim` only (`-DGNSS_SIM`) |
 
 ## Diagnostics (compile-time, default off)

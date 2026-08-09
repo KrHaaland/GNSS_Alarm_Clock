@@ -28,12 +28,38 @@ none stop daily use — the clock runs off the battery-backed RTC.
 | Audio (DAC→TPA2016) | ✅ Working | WAV + 3 melodies, digital + amp volume |
 | LEDs (3 sections) | ✅ Working | Chase/blink; v2: +5 V boost rail (battery-capable), v1: supercap rail |
 | Tunes over USB | ⏳ Awaiting part | v2's U8 is a 1.8 V W25Q128FW (wrong variant) — storage disabled until a JVSIQ is fitted; melodies work |
-| Settings persistence | ✅ Working | RV-3028 user EEPROM (39 B packed) — survives reboot **and reflash** (verified) |
+| Settings persistence | ✅ Working | RV-3028 user EEPROM (38 B packed, v4) — survives reboot, reflash **and format upgrades** (in-place migration, verified) |
 | UI (9 screens) | ✅ Working | 4-button nav, true-black theme, starry-night option |
 
 ---
 
 ## 2. Recent changes
+
+**Power budget, RTC backup & bootloader hardening (2026-08-03 → 08-09):**
+- **IBATLIM is the system's power wall**: the nPM1300 limits battery
+  discharge to 1000 mA — exceeding it collapses VSYS below VSYSPOF and
+  resets the device (bench-confirmed: full volume + all LEDs cut ~30 s in
+  as the amp's AGC wound up, even at 4.1 V). Volume ceiling re-tuned to
+  +7 dBV (~500–900 mA worst case measured); a USB-only higher ceiling was
+  rejected — IBATLIM applies instantly at unplug, software can't win that
+  race (ADR-0010).
+- **Dev telemetry**: live `V/mA` readout on the clock face + ringing screen
+  (`UI_DEV_IBAT` in Ui.cpp, 1 Hz) — bench tool for the power work above.
+- **RTC backup switchover now EEPROM-verified at boot** after a flat-battery
+  incident reset the RTC: factory-fresh RV-3028s ship with switchover OFF;
+  read-back + rewrite until BSM=LSM verifies, PORF surfaced on System info.
+- **Bootloader zeroed by a brownout**: repeated VSYSPOF resets during the
+  power bench work left one wild NVMCTRL quad-word write at address 0
+  (NVMCTRL.ADDR resets to 0) — the bootloader's vector table was zeroed,
+  bricking boot (double-fault lockup). Restored via SWD; **BOOTPROT fuse
+  now set (16 KB)** so flash hardware refuses such writes.
+- **USB flashing repaired**: the stock J19A bootloader reads the dbl-tap
+  magic at a different RAM top than the J20 app writes it; the build now
+  patches `initiateReset()` to write both — `pio run -t upload` works over
+  USB (ADR-0015 update).
+- **Settings format v4**: snoozeTotal u32→u24 + spare byte dropped (40→38 B);
+  old blocks migrate in place at boot, nothing resets.
+- Display flipped 180° (`MADCTL 0xA0`, Y-offset 12) to match the enclosure.
 
 **Power management completed (2026-08-01 → 08-02)** — ADR-0014/0016:
 - **CC-following input limit** (500 mA PC / 1500 mA charger) re-applied
