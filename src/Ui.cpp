@@ -69,6 +69,29 @@ static lv_obj_t *s_ckBig, *s_ckSec, *s_ckAmpm, *s_ckBottom;
 static char s_cStatL[24];
 static char s_cBig[12], s_cSec[8], s_cAmpm[8], s_cBottom[72];
 
+// Development diagnostic: live VBAT/IBAT from the nPM1300 on the clock face
+// and the ringing screen (1 Hz poll). For power-budget bench work — set to 0
+// for release builds.
+#define UI_DEV_IBAT 1
+#if UI_DEV_IBAT
+static lv_obj_t *s_ckIbat, *s_rgIbat;
+// 1 Hz cached PMIC reading shared by both labels; returns "3.87V -843mA".
+static const char *dev_ibat_text() {
+  static char buf[20];
+  static uint32_t readMs;
+  if (buf[0] == '\0' || (uint32_t)(millis() - readMs) >= 1000) {
+    readMs = millis();
+    PmicStatus st;
+    if (pmic_present() && pmic_read_status(st))
+      snprintf(buf, sizeof(buf), "%u.%02uV %+dmA", st.vbatMv / 1000,
+               (st.vbatMv % 1000) / 10, (int)st.ibatMa);
+    else
+      snprintf(buf, sizeof(buf), "--V --mA");
+  }
+  return buf;
+}
+#endif
+
 // Top-right status row: [USB] [bolt] [battery widget] [bell] in a flex row.
 // The battery is drawn, not a font glyph: white frame + nub, fill bar whose
 // width tracks the measured SoC and whose color grades red/orange/green.
@@ -424,6 +447,9 @@ static void refresh_clock(bool force) {
   else
     snprintf(b, sizeof(b), LV_SYMBOL_GPS " --");
   set_label_if(s_ckStatL, s_cStatL, sizeof(s_cStatL), b, force);
+#if UI_DEV_IBAT
+  lv_label_set_text(s_ckIbat, dev_ibat_text());
+#endif
 
   // (time source + DST indicator removed from the clock face; still shown on
   //  the System info screen.)
@@ -606,6 +632,13 @@ static void make_clock() {
   s_ckStatL = lv_label_create(scr);
   lv_obj_set_style_text_font(s_ckStatL, &lv_font_montserrat_16, 0);
   lv_obj_align(s_ckStatL, LV_ALIGN_TOP_LEFT, 2, 0);
+#if UI_DEV_IBAT
+  s_ckIbat = lv_label_create(scr);
+  lv_obj_set_style_text_font(s_ckIbat, &lv_font_montserrat_16, 0);
+  lv_obj_set_style_text_color(s_ckIbat, lv_color_hex(0x808080), 0);
+  lv_obj_align(s_ckIbat, LV_ALIGN_TOP_LEFT, 2, 18);
+  lv_label_set_text_static(s_ckIbat, "");
+#endif
 
   // Status row (flex) top-right: USB, charge bolt, battery widget, bell.
   s_ckStatRow = lv_obj_create(scr);
@@ -676,6 +709,9 @@ static void make_clock() {
   // the big clock label's box would cover the status symbols where they
   // overlap. Lift both status areas above everything else.
   lv_obj_move_foreground(s_ckStatL);
+#if UI_DEV_IBAT
+  lv_obj_move_foreground(s_ckIbat);
+#endif
   lv_obj_move_foreground(s_ckStatRow);
 
   s_cStatL[0] = '\0';
@@ -1564,6 +1600,14 @@ static void make_ringing() {
   lv_obj_set_style_text_font(s_rgHint, &lv_font_montserrat_16, 0);
   lv_obj_align(s_rgHint, LV_ALIGN_BOTTOM_MID, 0, 0);
   lv_label_set_text_static(s_rgHint, "press = snooze    hold = stop");
+
+#if UI_DEV_IBAT
+  s_rgIbat = lv_label_create(scr);
+  lv_obj_set_style_text_font(s_rgIbat, &lv_font_montserrat_16, 0);
+  lv_obj_set_style_text_color(s_rgIbat, lv_color_hex(0x808080), 0);
+  lv_obj_align(s_rgIbat, LV_ALIGN_TOP_LEFT, 2, 0);
+  lv_label_set_text_static(s_rgIbat, "");
+#endif
 }
 
 // ------------------------------------------------------- screen loading ---
@@ -1945,6 +1989,9 @@ void ui_task() {
   case SCR_SYS:   refresh_sysinfo(false); break;
   case SCR_SKY:   refresh_sky(false); break;
   case SCR_PMIC:  refresh_pmic(false); break;
+#if UI_DEV_IBAT
+  case SCR_RING:  lv_label_set_text(s_rgIbat, dev_ibat_text()); break;
+#endif
   default:        break;
   }
 }
