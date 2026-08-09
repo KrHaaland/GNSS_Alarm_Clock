@@ -27,6 +27,18 @@ into the app instead of the bootloader.
 - USB paths (1200-baud touch, UF2 drag-and-drop) remain as fallbacks when
   no debug probe is attached.
 
+## Update 2026-08-09: USB flashing repaired and promoted
+The "touches that reset into the app" mystery was root-caused: the Arduino
+core writes the stay-in-bootloader magic at the **compiled chip's** RAM top
+(J20: 0x2003FFFC) while the stock J19A-built bootloader reads **its own**
+(0x2002FFFC). `tools/patch_tinyusb_power.py` now patches `initiateReset()`
+to write both addresses; `pio run -t upload` works reliably over USB (and
+bossac verifies ~5× faster than SWD). SWD remains the surgical path —
+bootloader repair, fuses, lockup autopsies. Relatedly: after a
+brownout-induced wild NVMCTRL write zeroed the bootloader's vector table,
+the **BOOTPROT fuse is now set to 16 KB** (clear with `atsame5 bootloader 0`
+before intentional bootloader updates).
+
 ## Consequences
 - Memory ceilings are gone for the foreseeable future (flash 42 %, RAM
   60 % at time of writing); features like a finer timezone polygon map

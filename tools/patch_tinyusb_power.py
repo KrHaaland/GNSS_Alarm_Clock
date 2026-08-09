@@ -44,3 +44,33 @@ for F in CANDIDATES:
     else:
         print("patch_tinyusb_power: WARNING - pattern not found in %s "
               "(TinyUSB version changed?); bMaxPower stays 100 mA" % F)
+
+# --- Second patch: 1200-baud touch vs J19-built bootloader -------------------
+# The Arduino core's initiateReset() (Reset.cpp) parks the "stay in
+# bootloader" magic at HSRAM top computed for the COMPILED chip: 0x2003FFFC
+# on the SAMD51J20A. The stock Metro M4 UF2 bootloader is built for the
+# J19A (192 KB RAM) and reads 0x2002FFFC, so the 1200-baud touch reset lands
+# straight back in the app. Write the J19 address as well — on a J19 build
+# both writes hit the same word, so this is chip-agnostic and harmless.
+RESET_CPP = os.path.join(
+    env.PioPlatform().get_package_dir("framework-arduino-samd-adafruit")
+    or "", "cores", "arduino", "Reset.cpp")
+MARKER = "GNSS_Alarm_Clock dbl-tap patch"
+try:
+    with open(RESET_CPP) as f:
+        src = f.read()
+    if MARKER not in src:
+        needle = "\t*a = DOUBLE_TAP_MAGIC;\n"
+        patch = (needle +
+                 "\t// " + MARKER + ": also write the magic where a J19A-built\n"
+                 "\t// bootloader looks for it (192 KB RAM top).\n"
+                 "\t*(unsigned long *)(HSRAM_ADDR + 0x30000ul - 4) = "
+                 "DOUBLE_TAP_MAGIC;\n")
+        if needle in src:
+            with open(RESET_CPP, "w") as f:
+                f.write(src.replace(needle, patch, 1))
+            print("patched Reset.cpp (dual dbl-tap magic)")
+        else:
+            print("WARNING: Reset.cpp anchor not found - dbl-tap patch skipped")
+except OSError as e:
+    print("WARNING: could not patch Reset.cpp:", e)
