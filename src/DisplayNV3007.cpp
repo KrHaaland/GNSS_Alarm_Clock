@@ -21,7 +21,7 @@ static const uint32_t kSpiHz = 30000000;
 // --- Panel-specific: tune these on hardware if the image is wrong -----------
 // MADCTL for landscape (bit5 MV row/col exchange, bit6 MX, bit7 MY, bit3 BGR).
 // If mirrored/upside-down, try 0x60 / 0xA0 / 0xC0 / 0x70.
-#define NV_MADCTL 0x60
+#define NV_MADCTL 0xA0
 // 142x428 modules run non-inverted (vendor init sends no INVON); flip only
 // if colors come out negative (one TFT_eSPI report needed it).
 #define NV_INVERSION 0
@@ -29,7 +29,7 @@ static const uint32_t kSpiHz = 30000000;
 // In LANDSCAPE (MV set) the inset lands on RASET: MADCTL 0x60 -> Y+14,
 // MADCTL 0xA0 (flipped) -> Y+12. X spans all 428 rows, offset 0.
 #define NV_X_OFFSET 0
-#define NV_Y_OFFSET 14
+#define NV_Y_OFFSET 12
 
 // Two partial-render buffers, 32 rows each, RGB565 (~27 KB apiece): LVGL
 // renders the next strip into one while DMA streams the other to the panel.
