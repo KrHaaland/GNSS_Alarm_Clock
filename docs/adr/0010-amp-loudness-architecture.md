@@ -22,7 +22,15 @@ real volume control**, so:
 - fixed gain stays constant (+6 dB into the AGC),
 - the digital (DAC) volume is pinned high — it would otherwise be undone by
   the AGC,
-- **gentle wake**: on an alarm's first ring the limiter ramps from minimum to
+- a **200 Hz 2nd-order Butterworth high-pass** filters the WAV path in
+  firmware (AudioEngine, `AUDIO_HPF_HZ`): below the small driver's resonance
+  the impedance is at minimum (max current) while the cone barely radiates,
+  so deep bass was the most expensive content per mA and the least audible.
+  Trimming it lowers the sustained current peaks that threaten the
+  nPM1300's IBATLIM (ADR-0014) — and the AGC then spends the energy budget
+  on the audible band instead. Builtin melodies (sines ~260 Hz+) bypass it.
+  Bench tool: `tools/gen_sweep.py` + the dev IBAT readout map the speaker's
+  current-vs-frequency curve in one 30 s pass,
   the set volume over 0/15/30/60 s — configured **per alarm** in the alarm
   editor (weekday alarm can fade in, weekend alarm can blast); snooze
   **re-rings skip the ramp**, and buzzer escalation jumps to full volume,

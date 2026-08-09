@@ -123,8 +123,53 @@ void TC2_Handler() { // fallback path only (DMA channel unavailable)
   }
 }
 
+// --- Playback high-pass filter (WAV path only) -------------------------------
+// Deep bass is the most expensive content per mA and the least audible on the
+// small driver: below its resonance the impedance is at minimum (max current)
+// while the cone barely radiates. A 2nd-order Butterworth high-pass ahead of
+// the volume scaler trims those sustained current peaks (the nPM1300's
+// 1000 mA IBATLIM is the wall — see ADR-0010/0014). Builtin melodies bypass
+// this on purpose: synthesized sines at ~260 Hz+ carry no sub content.
+// Set to 0.0f to disable. Coefficients depend on the sample rate, so
+// hpf_setup() runs at every WAV start (rates vary 8-48 kHz).
+#define AUDIO_HPF_HZ 200.0f
+
+static float hB0, hB1, hB2, hA1, hA2; // biquad coefficients (a0-normalized)
+static float hX1, hX2, hY1, hY2;      // filter state
+static bool hpfOn = false;
+
+static void hpf_setup(uint32_t rate) {
+  hX1 = hX2 = hY1 = hY2 = 0.0f;
+  hpfOn = (AUDIO_HPF_HZ > 0.0f) && ((float)rate > AUDIO_HPF_HZ * 4.0f);
+  if (!hpfOn)
+    return;
+  float w0 = 2.0f * (float)PI * AUDIO_HPF_HZ / (float)rate;
+  float cw = cosf(w0);
+  float alpha = sinf(w0) * 0.70710678f; // = sin/(2Q), Q = 1/sqrt(2)
+  float a0 = 1.0f + alpha;
+  hB0 = (1.0f + cw) * 0.5f / a0;
+  hB1 = -(1.0f + cw) / a0;
+  hB2 = hB0;
+  hA1 = -2.0f * cw / a0;
+  hA2 = (1.0f - alpha) / a0;
+}
+
+static inline int32_t hpf_process(int32_t centered) {
+  if (!hpfOn)
+    return centered;
+  float x = (float)centered;
+  float y = hB0 * x + hB1 * hX1 + hB2 * hX2 - hA1 * hY1 - hA2 * hY2;
+  hX2 = hX1; hX1 = x;
+  hY2 = hY1; hY1 = y;
+  // The filter can overshoot a full-scale edge slightly; clamp to 12-bit.
+  if (y > 2047.0f) y = 2047.0f;
+  if (y < -2048.0f) y = -2048.0f;
+  return (int32_t)y;
+}
+
 static uint16_t apply_volume(int32_t s12) {
-  return (uint16_t)(2048 + (((s12 - 2048) * (int32_t)volFactor) >> 8));
+  int32_t c = hpf_process(s12 - 2048);
+  return (uint16_t)(2048 + ((c * (int32_t)volFactor) >> 8));
 }
 
 // Source ran dry mid-half: pad with midpoint, then stop once both queued
@@ -438,6 +483,7 @@ bool audio_play_wav(const char *filename, bool loop) {
   wavBytesLeft = wavDataSize;
   loopFlag = loop;
   srcState = SRC_WAV;
+  hpf_setup(rate); // coefficients + state BEFORE priming filters samples
   prime_reset();
   wav_fill_half(); // prime before the pacer starts eating samples
   if (srcState == SRC_WAV)

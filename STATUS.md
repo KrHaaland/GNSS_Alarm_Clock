@@ -45,6 +45,13 @@ none stop daily use — the clock runs off the battery-backed RTC.
   race (ADR-0010).
 - **Dev telemetry**: live `V/mA` readout on the clock face + ringing screen
   (`UI_DEV_IBAT` in Ui.cpp, 1 Hz) — bench tool for the power work above.
+- **200 Hz high-pass in the WAV path** (2nd-order Butterworth, per-tune
+  sample-rate aware): deep bass drew the most current (speaker impedance
+  minimum) for the least sound — trimming it cuts the sustained peaks that
+  threaten IBATLIM and lets the AGC spend the budget on audible content.
+  Bench-verified with a log-sweep WAV (`tools/gen_sweep.py`) + the mA
+  readout; this board's actual IBATLIM trips somewhere above the 1120 mA
+  measurement ceiling (spec says 1000 — margin exists but is unstamped).
 - **RTC backup switchover now EEPROM-verified at boot** after a flat-battery
   incident reset the RTC: factory-fresh RV-3028s ship with switchover OFF;
   read-back + rewrite until BSM=LSM verifies, PORF surfaced on System info.

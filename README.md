@@ -68,7 +68,9 @@ a 428×142 color TFT driven by four buttons.
     v1: the LTC3226 supercap rail) — brightness never depends on the USB
     supply,
   - a tune plays: a **WAV** from the QSPI flash drive, or one of 3 built-in
-    melodies, via **DAC0 → TPA2016D2** class-D amp → speaker,
+    melodies, via **DAC0 → TPA2016D2** class-D amp → speaker. WAVs pass a
+    **200 Hz high-pass** in firmware: sub-bass cost the most battery current
+    (speaker impedance minimum) for the least sound (ADR-0010),
   - optional **escalation**: after *N* minutes unacknowledged, the power buzzer
     joins in (v1 hardware only — v2 dropped the buzzer); auto-silence after
     30 min.
