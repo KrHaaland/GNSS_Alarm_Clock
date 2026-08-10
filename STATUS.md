@@ -94,8 +94,11 @@ none stop daily use — the clock runs off the battery-backed RTC.
   the observed plug-in jump); a coulomb-counting tracker was tried and
   deliberately reverted (guesses beat by measurements — ADR-0016). Clock
   face shows a drawn battery gauge (red/orange/green fill), no percent.
-- Battery identified: **LG HG2 18650 3000 mAh, unprotected power cell** —
-  the firmware's cutoff IS the protection layer.
+- Battery (bring-up): LG HG2 18650 3000 mAh unprotected power cell — the
+  firmware's cutoff was the protection layer. **Replaced 2026-08-10 by the
+  production cell: generic 505060 LiPo, 2000 mAh, with PCM** (firmware's
+  3.40 V cutoff still acts first). Higher source impedance than the HG2 —
+  SoC path-resistance re-calibration + worst-case audio re-test pending.
 
 **v2 board bring-up (2026-07-22 → 08-01)** — full session log in
 `docs/sessions/`. Every subsystem verified on the new board:
