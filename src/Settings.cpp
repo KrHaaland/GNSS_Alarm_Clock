@@ -54,7 +54,8 @@ enum : uint8_t {
 #define V1_LEN 39 // v1 image: 38-byte payload, checksum at offset 38
 // alarm flags byte: b0 enabled, b1-2 gentle-wake ramp index (see kRampSecs),
 // b3-4 random-jitter index (see kJitterMin; older v3 images have 00 = off,
-// which reads back compatibly - no version bump needed)
+// which reads back compatibly - no version bump needed), b5 lights-OFF
+// (inverted so old blocks' 0 = LED show on, again no version bump)
 static const uint8_t kRampSecs[4] = {0, 15, 30, 60};
 static const uint8_t kJitterMin[4] = {0, 1, 5, 9};
 static uint8_t jitter_idx(uint8_t m) {
@@ -144,7 +145,8 @@ static void pack(const Settings &in, uint8_t out[PACK_LEN]) {
     uint8_t *a = &out[i == 0 ? OFF_ALARM0 : OFF_ALARM1];
     const AlarmConfig &ac = in.alarms[i];
     a[0] = (uint8_t)((ac.enabled ? 1 : 0) | (ramp_idx(ac.rampSeconds) << 1) |
-                     (jitter_idx(ac.jitterMinutes) << 3));
+                     (jitter_idx(ac.jitterMinutes) << 3) |
+                     (ac.lights ? 0 : 0x20));
     a[1] = ac.hour;
     a[2] = ac.minute;
     a[3] = ac.daysMask;
@@ -202,6 +204,7 @@ static void unpack(const uint8_t in[PACK_LEN], Settings &out) {
     ac.enabled = a[0] & 1;
     ac.rampSeconds = kRampSecs[(a[0] >> 1) & 3];
     ac.jitterMinutes = kJitterMin[(a[0] >> 3) & 3];
+    ac.lights = !(a[0] & 0x20);
     ac.hour = a[1] <= 23 ? a[1] : 7;
     ac.minute = a[2] <= 59 ? a[2] : 0;
     ac.daysMask = a[3] & 0x7F;
@@ -249,6 +252,7 @@ void settings_defaults() {
   s.alarms[0].melodyId = 0;
   s.alarms[0].rampSeconds = 30;
   s.alarms[0].jitterMinutes = 0;
+  s.alarms[0].lights = true;
 
   s.alarms[1].enabled = false;
   s.alarms[1].hour = 9;
@@ -258,6 +262,7 @@ void settings_defaults() {
   s.alarms[1].melodyId = 2;
   s.alarms[1].rampSeconds = 30;
   s.alarms[1].jitterMinutes = 0;
+  s.alarms[1].lights = true;
 
   s.volume = 7;
   s.snoozeMinutes = 9;

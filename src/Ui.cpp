@@ -142,8 +142,9 @@ static lv_obj_t *s_modeLabel; // "Mode: ..." cycle item label
 // AlarmEdit
 static int8_t s_alarmIdx;
 static lv_obj_t *s_alTitle, *s_alEnable, *s_alHour, *s_alMin, *s_alDays;
-static lv_obj_t *s_alTune, *s_alRamp, *s_alJit, *s_alTest, *s_alSave;
-static lv_obj_t *s_fAlarm[9];
+static lv_obj_t *s_alTune, *s_alRamp, *s_alJit, *s_alLights, *s_alTest,
+    *s_alSave;
+static lv_obj_t *s_fAlarm[10];
 
 // Time & zone
 static lv_obj_t *s_tzAuto, *s_tzZone, *s_tz24, *s_tzSync, *s_tzInfo;
@@ -861,6 +862,7 @@ static void alarm_save_cb(lv_event_t *e) {
   }
   a.rampSeconds = RAMP_SECONDS[lv_dropdown_get_selected(s_alRamp) & 3];
   a.jitterMinutes = JITTER_MINUTES[lv_dropdown_get_selected(s_alJit) & 3];
+  a.lights = lv_obj_has_state(s_alLights, LV_STATE_CHECKED);
   settings_save();
   preview_stop();
   load_screen(SCR_MENU);
@@ -910,6 +912,10 @@ static void alarm_sync_widgets() {
     if (a.jitterMinutes >= JITTER_MINUTES[i])
       ji = i;
   lv_dropdown_set_selected(s_alJit, ji);
+  if (a.lights)
+    lv_obj_add_state(s_alLights, LV_STATE_CHECKED);
+  else
+    lv_obj_remove_state(s_alLights, LV_STATE_CHECKED);
 }
 
 static void make_alarm() {
@@ -966,6 +972,9 @@ static void make_alarm() {
                              &lv_font_montserrat_16, 0);
   blacken(lv_dropdown_get_list(s_alJit));
 
+  row = make_row(scr, "Lights");
+  s_alLights = lv_switch_create(row); // off = sound-only alarm
+
   row = make_row(scr, NULL);
   s_alTest = lv_button_create(row);
   lv_obj_t *l = lv_label_create(s_alTest);
@@ -976,9 +985,9 @@ static void make_alarm() {
   lv_obj_add_event_cb(s_alTest, alarm_test_cb, LV_EVENT_CLICKED, NULL);
   lv_obj_add_event_cb(s_alSave, alarm_save_cb, LV_EVENT_CLICKED, NULL);
 
-  lv_obj_t *foc[9] = {s_alEnable, s_alHour, s_alMin, s_alDays, s_alTune,
-                      s_alRamp,   s_alJit,  s_alTest, s_alSave};
-  for (uint8_t i = 0; i < 9; i++) {
+  lv_obj_t *foc[10] = {s_alEnable, s_alHour,   s_alMin,  s_alDays, s_alTune,
+                       s_alRamp,   s_alJit, s_alLights, s_alTest, s_alSave};
+  for (uint8_t i = 0; i < 10; i++) {
     s_fAlarm[i] = foc[i];
     lv_obj_add_flag(foc[i], LV_OBJ_FLAG_SCROLL_ON_FOCUS);
   }
@@ -1624,7 +1633,7 @@ static void load_screen(UiScreen id) {
     menu_refresh_mode();
     group_set(s_fMenu, MENU_COUNT);
     break;
-  case SCR_ALARM: alarm_sync_widgets(); group_set(s_fAlarm, 9); break;
+  case SCR_ALARM: alarm_sync_widgets(); group_set(s_fAlarm, 10); break;
   case SCR_TZ:    tz_sync_widgets(); group_set(s_fTz, 4); break;
   case SCR_DISP:  disp_sync_widgets(); group_set(s_fDisp, 5); break;
   case SCR_TUNES:

@@ -42,7 +42,7 @@ Dropdown lists open as a full-screen overlay with the current choice centered.
 
 | Item | What it does |
 |---|---|
-| Alarm 1 / Alarm 2 | Enable switch, time rollers, weekday matrix (S M T W T F S — **no days selected = every day**), tune dropdown, **Ramp** (per-alarm gentle wake: Off/15/30/60 s), **Random** (the alarm fires at a random offset of ±1/±5/±9 min around the set time — a new roll every occurrence, and the display still shows the set time so you can't cheat), Test, Save. *Back does not save.* |
+| Alarm 1 / Alarm 2 | Enable switch, time rollers, weekday matrix (S M T W T F S — **no days selected = every day**), tune dropdown, **Ramp** (per-alarm gentle wake: Off/15/30/60 s), **Random** (the alarm fires at a random offset of ±1/±5/±9 min around the set time — a new roll every occurrence, and the display still shows the set time so you can't cheat), **Lights** (the LED show while ringing; off = sound-only alarm), Test, Save. *Back does not save.* |
 | Time & zone | **Auto TZ (GNSS)** on/off; manual **Zone** = the full GMT ladder (GMT−12…+14 incl. half/quarter hours, fixed offsets, no DST); 24 h switch; **Sync now**. |
 | Disp & sound | **Volume** (0–10, live while a tune plays), brightness slider (live), dim-after timeout, dim level, **Starry night** (stars behind the clock 22–06). |
 | Tunes | Preview built-in melodies and WAVs from the TUNES drive (press again to stop). Unavailable while the USB host owns the drive. |

@@ -28,6 +28,7 @@ struct AlarmConfig {
   uint8_t melodyId;         // builtin melody when tune[0] == 0
   uint8_t rampSeconds;      // gentle-wake fade-in 0/15/30/60 s (0 = off)
   uint8_t jitterMinutes;    // random trigger offset 0/1/5/9 min (0 = exact)
+  bool lights;              // LED show while ringing (off = sound only)
 };
 
 struct Settings {

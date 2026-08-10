@@ -66,7 +66,8 @@ a 428×142 color TFT driven by four buttons.
   - the **34 LEDs** (3 sections: left 10 / bottom 14 / right 10) run a chase at
     full brightness from a battery-capable rail (v2: TPS61023 5 V boost;
     v1: the LTC3226 supercap rail) — brightness never depends on the USB
-    supply,
+    supply. The light show is **switchable per alarm** (Lights in the alarm
+    editor; off = sound-only alarm),
   - a tune plays: a **WAV** from the QSPI flash drive, or one of 3 built-in
     melodies, via **DAC0 → TPA2016D2** class-D amp → speaker. WAVs pass a
     **200 Hz high-pass** in firmware: sub-bass cost the most battery current
@@ -173,7 +174,7 @@ are stored as 16-bit FNV-1a hashes re-matched against the TUNES directory
 | `0x10` | 3 | Snooze counter, all time (u24, caps at 16.7 M) |
 | `0x13` | 2 | Snooze counter, this week (u16) |
 | `0x15` | 2 | Week start, local epoch-day − 18262 (u16, base 2020-01-01) |
-| `0x17` | 7 | Alarm 1: flags (b0 enabled, b1–2 ramp Off/15/30/60 s, b3–4 random ±0/1/5/9 min), hour, minute, daysMask, melodyId, tuneHash (u16) |
+| `0x17` | 7 | Alarm 1: flags (b0 enabled, b1–2 ramp Off/15/30/60 s, b3–4 random ±0/1/5/9 min, b5 lights-OFF — inverted so old blocks read as on), hour, minute, daysMask, melodyId, tuneHash (u16) |
 | `0x1E` | 7 | Alarm 2: same layout |
 | `0x25` | 1 | Checksum (block sums to `0xFF`) — **written last**, so a torn write invalidates the image |
 | `0x26` | 5 | Free / future |

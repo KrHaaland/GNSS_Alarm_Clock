@@ -67,6 +67,10 @@ none stop daily use — the clock runs off the battery-backed RTC.
 - **Settings format v4**: snoozeTotal u32→u24 + spare byte dropped (40→38 B);
   old blocks migrate in place at boot, nothing resets.
 - Display flipped 180° (`MADCTL 0xA0`, Y-offset 12) to match the enclosure.
+- **Per-alarm Lights switch** (alarm editor): off = sound-only alarm — no
+  LED chase/blink while ringing. Stored in a free alarm-flag bit
+  (inverted; old settings read back as on, no migration needed). Also
+  saves the chase's ~0.2-0.3 A on battery alarms.
 
 **Power management completed (2026-08-01 → 08-02)** — ADR-0014/0016:
 - **CC-following input limit** (500 mA PC / 1500 mA charger) re-applied

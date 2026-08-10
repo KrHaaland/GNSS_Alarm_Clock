@@ -59,7 +59,8 @@ static void start_ringing(int8_t idx, bool escalated) {
   if (!escalated)
     s_ringStartMs = millis(); // arm-delay reference for tap-to-snooze
 
-  leds_start(LedPattern::Chase, 150);
+  if (a.lights)
+    leds_start(LedPattern::Chase, 150); // per-alarm: off = sound-only alarm
 
   if (!escalated) {
     // Initial fire or snooze re-ring: kill any tune preview and (re)start
@@ -84,7 +85,8 @@ static void start_ringing(int8_t idx, bool escalated) {
     s_escalated = true;
     amp_set_volume(settings().volume); // escalation jumps past any ramp
     buzzer_start();
-    leds_start(LedPattern::Blink, 250); // more aggressive pattern
+    if (a.lights)
+      leds_start(LedPattern::Blink, 250); // more aggressive pattern
   }
 
   ui_show_ringing(idx);
