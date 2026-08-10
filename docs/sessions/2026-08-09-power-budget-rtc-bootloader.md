@@ -1,4 +1,4 @@
-# Bench session 2026-08-03 → 08-09 — power budget, RTC backup, bootloader
+# Bench session 2026-08-03 → 08-10 — power budget, RTC backup, bootloader
 
 Follow-up bench work on the v2 board (J20 + nPM1300 + LG HG2). Three
 investigations that turned out to be one story: the battery discharge limit.
@@ -81,3 +81,44 @@ made it clean: the u24 keeps the u32's three low bytes in place.
 
 Also this window: display flipped 180° (`MADCTL 0xA0`, Y-offset 12) to
 match the enclosure mounting.
+
+## 6. Audio high-pass — sub-bass costs mA, not sound (08-09 → 08-10)
+
+Follow-through on the IBATLIM work: deep bass is the most expensive
+content per mA (speaker impedance minimum below the driver resonance) and
+the least audible on a small driver. A **200 Hz 2nd-order Butterworth
+high-pass** now filters the WAV path (per-tune sample-rate aware; builtin
+melodies bypass — synth sines ~260 Hz+). The AGC spends the energy budget
+on the audible band instead: same loudness, lower sustained peaks.
+
+Bench instrument built alongside: `tools/gen_sweep.py` generates a 30 s
+log sweep WAV (20 Hz–20 kHz, equal time per octave, crest factor 1 — the
+harshest possible load) that together with the dev IBAT readout maps the
+speaker's current-vs-frequency curve in one pass. Measured on this board:
+**survives ≥1116 mA sustained** — the IBAT ADC's ceiling at the 1000 mA
+limit setting — so this unit's actual IBATLIM sits above spec (Nordic
+originally characterized 1370 mA before down-spec'ing to 1000). Margin
+noted, not designed against. Also considered and correctly rejected:
+polymer bulk caps (ESR hygiene, not amps — µs-scale energy, not the
+100 ms a bass note needs) and AGC re-tuning (changes how often you're at
+max, not how high max is; only the limiter voltage bounds current
+deterministically).
+
+## 7. Per-alarm Lights switch (08-10)
+
+New alarm-editor row: the LED show while ringing (chase + escalation
+blink) is switchable per alarm — off = sound-only alarm. Stored in free
+alarm-flag bit 5, inverted so old blocks read back as on (no format
+bump — the starryNight/jitter trick). Side benefit: saves the chase's
+~0.2–0.3 A on battery alarms.
+
+## 8. Production battery fitted (08-10)
+
+The bring-up LG HG2 18650 (3000 mAh, unprotected, ~25 mΩ) was replaced by
+the production cell: **generic 505060 LiPo pouch, 2000 mAh, with PCM**.
+Charging config kept (400/800 mA = 0.2/0.4C on this cell, 4.10 V
+termination, 80/70 °C thermostat). Pending measurements: SoC
+path-resistance re-calibration (the ~160 mΩ constant is HG2+holder
+specific; generic pouch + PCM is expected notably higher), worst-case
+audio re-test (bigger sag), and possibly IR-compensating the low-battery
+watchdog with the new constant.

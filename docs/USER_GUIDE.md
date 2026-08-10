@@ -52,15 +52,17 @@ Dropdown lists open as a full-screen overlay with the current choice centered.
 | Lights | Manual on/off switch per LED section (Left 10 / Bottom 14 / Right 10). A power-measurement tool: flip a section, hop to Battery and read the current. State persists while navigating; an alarm's light show overrides it. |
 | Tap snooze | Toggle double-tap-to-snooze. |
 | Mode | Cycles the main screen: **Alarm clock → Speedometer → Altimeter → Game mode**. |
-| Shutdown | (v2, battery only) Confirm with OK → the PMIC cuts the battery (<500 nA); the RTC keeps time. **B1 or a USB plug wakes it.** On USB power it asks you to unplug instead. |
+| Shutdown | (v2, battery only) Confirm with OK → the PMIC cuts the battery (<500 nA); the RTC keeps time. **B1 or a USB plug wakes it.** On USB power it asks you to unplug instead. The clock also does this by itself when the battery runs down to 3.40 V (never while an alarm rings/snoozes); woken too early without a charger it shows LOW BATTERY and turns back off — plug in USB and it boots normally. |
 | Back | To the clock. |
 
 ## Alarms
 
 - On trigger: LED chase + the chosen tune (WAV, else built-in melody) —
   fading in over the alarm's own **Ramp** setting on the first ring (snooze
-  re-rings and buzzer escalation play at full volume immediately). Tunes play
-  at comparable loudness regardless of how the WAV was mastered (AGC).
+  re-rings and buzzer escalation play at full volume immediately). The light
+  show is per-alarm: **Lights off** in the alarm editor gives a sound-only
+  alarm. Tunes play at comparable loudness regardless of how the WAV was
+  mastered (AGC).
   After the configured minutes unacknowledged, the power buzzer joins in.
   Auto-silence after 30 min; the alarm re-arms for its next day.
 - **Snooze**: short-press any button, or **double-tap the clock body**
@@ -84,6 +86,13 @@ Plug into a computer — the **TUNES** drive appears. Drop `.wav` files in the
 root: PCM, 8- or 16-bit, mono or stereo, 8–48 kHz, filename ≤ 31 chars.
 Select the tune in the alarm editor. If a chosen file is later deleted, the
 alarm falls back to its built-in melody.
+
+Playback high-passes WAVs at **200 Hz**: the small speaker can't reproduce
+deep bass anyway — it only burns battery current (below the driver's
+resonance the impedance is at its minimum while the cone barely moves), so
+sub-bass is traded for louder, cleaner output in the audible band. Pick or
+master alarm tunes for mid/high energy; sub-heavy tracks lose nothing you
+would have heard.
 
 ## Time & timezone
 
