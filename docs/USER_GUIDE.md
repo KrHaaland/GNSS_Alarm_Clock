@@ -87,6 +87,12 @@ root: PCM, 8- or 16-bit, mono or stereo, 8–48 kHz, filename ≤ 31 chars.
 Select the tune in the alarm editor. If a chosen file is later deleted, the
 alarm falls back to its built-in melody.
 
+**Converting MP3s**: `python3 tools/tune_converter.py` (Linux/Windows,
+needs ffmpeg on PATH) — opens a small GUI: load any audio file, drag across
+the waveform to cut out the section you want, preview it, and it writes a
+clock-ready WAV (16-bit mono, rate of your choice, peak-normalized,
+filename-length guarded).
+
 Playback high-passes WAVs at **200 Hz**: the small speaker can't reproduce
 deep bass anyway — it only burns battery current (below the driver's
 resonance the impedance is at its minimum while the cone barely moves), so
