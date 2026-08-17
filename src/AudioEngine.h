@@ -28,6 +28,9 @@ void audio_task();   // refill ring buffer / advance melody; call every loop
 // fall back to a melody).
 bool audio_play_wav(const char *filename, bool loop = true);
 void audio_play_melody(uint8_t id, bool loop = true);
+// One short synthesized tone (plays once; keep audio_task() pumped until
+// audio_playing() goes false). Used by the low-battery farewell chirp.
+void audio_play_beep(uint16_t freqHz, uint16_t ms);
 void audio_stop();       // stops DAC stream (does not touch the amp)
 bool audio_playing();
 

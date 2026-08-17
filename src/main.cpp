@@ -298,8 +298,26 @@ void loop() {
     if (pmic_read_status(st)) {
       bool alarmActive = alarm_state() != AlarmState::Idle;
       if (!st.vbusPresent && !alarmActive && st.vbatMv < PMIC_VBAT_SHIP_MV) {
-        if (++s_batLowCount >= 3)
+        if (++s_batLowCount >= 3) {
+          // Farewell alert: one short high chirp + a sequential light sweep,
+          // so a clock dying on the nightstand announces "charge me" instead
+          // of silently going dark. Moderate volume + one LED section at a
+          // time keeps the draw small at this battery level. The manual
+          // Shutdown menu stays silent on purpose (the user is present).
+          amp_enable(true);
+          amp_set_volume(6);
+          audio_play_beep(2200, 500);
+          static const bool SEQ[4][3] = {
+              {1, 0, 0}, {0, 1, 0}, {0, 0, 1}, {0, 0, 0}};
+          for (uint8_t i = 0; i < 4; i++) {
+            leds_set(SEQ[i][0], SEQ[i][1], SEQ[i][2]);
+            uint32_t t0 = millis();
+            while ((uint32_t)(millis() - t0) < 170)
+              audio_task(); // keep the chirp fed while the sweep runs
+          }
+          amp_enable(false);
           pmic_enter_ship_mode(); // does not return
+        }
       } else {
         s_batLowCount = 0;
       }

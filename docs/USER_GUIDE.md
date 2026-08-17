@@ -52,7 +52,7 @@ Dropdown lists open as a full-screen overlay with the current choice centered.
 | Lights | Manual on/off switch per LED section (Left 10 / Bottom 14 / Right 10). A power-measurement tool: flip a section, hop to Battery and read the current. State persists while navigating; an alarm's light show overrides it. |
 | Tap snooze | Toggle double-tap-to-snooze. |
 | Mode | Cycles the main screen: **Alarm clock → Speedometer → Altimeter → Game mode**. |
-| Shutdown | (v2, battery only) Confirm with OK → the PMIC cuts the battery (<500 nA); the RTC keeps time. **B1 or a USB plug wakes it.** On USB power it asks you to unplug instead. The clock also does this by itself when the battery runs down to 3.40 V (never while an alarm rings/snoozes); woken too early without a charger it shows LOW BATTERY and turns back off — plug in USB and it boots normally. |
+| Shutdown | (v2, battery only) Confirm with OK → the PMIC cuts the battery (<500 nA); the RTC keeps time. **B1 or a USB plug wakes it.** On USB power it asks you to unplug instead. The clock also does this by itself when the battery runs down to 3.40 V (never while an alarm rings/snoozes) — announced by a short high chirp and a light sweep right before it goes dark, so you notice a forgotten charger. Woken too early without a charger it shows LOW BATTERY and turns back off — plug in USB and it boots normally. |
 | Back | To the clock. |
 
 ## Alarms

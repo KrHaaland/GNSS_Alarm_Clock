@@ -497,6 +497,31 @@ bool audio_play_wav(const char *filename, bool loop) {
   return true;
 }
 
+// One synthesized tone through the normal melody machinery (sine + envelope).
+// Used by the low-battery farewell chirp; freq/duration in a RAM note the
+// melody source plays once. Caller keeps audio_task() pumped until done.
+void audio_play_beep(uint16_t freqHz, uint16_t ms) {
+  static Note beep[1];
+  if (!dacReady)
+    return;
+  audio_stop();
+  beep[0].freqHz = freqHz;
+  beep[0].ms = ms;
+  melNotes = beep;
+  melLen = 1;
+  melIdx = 0;
+  melNoteLeft = 0;
+  melGapLeft = 0;
+  loopFlag = false;
+  srcState = SRC_MELODY;
+  prime_reset();
+  melody_fill_half();
+  if (srcState == SRC_MELODY)
+    melody_fill_half();
+  if (!start_paced(MELODY_RATE))
+    audio_stop();
+}
+
 void audio_play_melody(uint8_t id, bool loop) {
   if (!dacReady || id >= AUDIO_MELODY_COUNT)
     return;

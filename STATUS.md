@@ -67,6 +67,10 @@ none stop daily use — the clock runs off the battery-backed RTC.
 - **Settings format v4**: snoozeTotal u32→u24 + spare byte dropped (40→38 B);
   old blocks migrate in place at boot, nothing resets.
 - Display flipped 180° (`MADCTL 0xA0`, Y-offset 12) to match the enclosure.
+- **Low-battery farewell chirp**: the automatic 3.40 V shutdown announces
+  itself — 0.5 s 2200 Hz beep (fixed moderate volume, independent of the
+  alarm volume) + a sequential LED sweep — so a forgotten charger is
+  noticed. Manual Shutdown stays silent on purpose.
 - **Per-alarm Lights switch** (alarm editor): off = sound-only alarm — no
   LED chase/blink while ringing. Stored in a free alarm-flag bit
   (inverted; old settings read back as on, no migration needed). Also
