@@ -44,7 +44,9 @@ USB-C (J1, CC1/CC2 -> PMIC)          Li-ion (J7, 2-pin JST-PH)
   long as a battery is fitted. Supercaps and LTC3226 are gone.
 - **Battery: generic 505060 LiPo pouch, 3.7 V 2000 mAh, WITH PCM**
   (fitted 2026-08-10, replacing the bring-up LG HG2 18650 3000 mAh
-  unprotected power cell). The PCM backstops overcharge/overdischarge/
+  unprotected power cell). Battery-to-PCB leads: **100 mm, 20 AWG**
+  (to J7/B2B-PH-K-S) — ~7 mOhm round trip, negligible next to the
+  cell+PCM source impedance. The PCM backstops overcharge/overdischarge/
   overcurrent, but the firmware's 3.40 V ship-mode cutoff still acts
   first (PCM floors are typically 2.5-3.0 V). Expect notably higher
   source impedance than the HG2 (generic pouch ~50-150 mOhm + PCM
