@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
-"""Grab a screenshot from the clock over USB serial.
+"""Grab screenshots from the clock over USB serial.
 
-Navigate the clock to the screen you want, then:
-    python3 tools/screenshot.py [-p /dev/ttyACM0] [-o out.png]
+    python3 tools/screenshot.py [-p /dev/ttyACM0] [-o base]
 
-Sends '~' to the firmware, which streams the next rendered frame as raw
-RGB565-LE strips (SHOT-BEGIN/AREA/END protocol in DisplayNV3007.cpp), and
-writes a PNG (pure stdlib — no PIL needed). Uses pyserial when installed;
-falls back to raw POSIX tty handling on Linux otherwise.
+Runs an interactive session: navigate the clock to a screen, press Enter
+to capture, repeat — each frame is saved as base_01.png, base_02.png, ...
+(numbering continues after existing files). 'q' + Enter quits.
+Single-shot mode: -1/--single writes exactly one capture and exits.
+
+Each capture sends '~' to the firmware, which streams the next rendered
+frame as raw RGB565-LE strips (SHOT-BEGIN/AREA/END protocol in
+DisplayNV3007.cpp); the PNG is written with pure stdlib (no PIL). Uses
+pyserial when installed; falls back to raw POSIX tty on Linux.
 """
 
 import argparse
@@ -99,28 +103,20 @@ def rgb565_to_rgb888(data):
 
 
 # --------------------------------------------------------------------- main --
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("-p", "--port", default="/dev/ttyACM0")
-    ap.add_argument("-o", "--out", default="screenshot.png")
-    args = ap.parse_args()
-
-    port = Port(args.port)
+def grab(port):
+    """Trigger and collect one frame; returns (w, h, fb) or None on timeout."""
     port.write(b"~")
-    print("sent '~', waiting for frame...")
-
     fb = None
     w = h = 0
     deadline = time.time() + 15
     while time.time() < deadline:
         line = port.read_line()
         if line is None:
-            sys.exit("timeout — is the firmware running and the port right?")
+            return None
         if line.startswith(b"SHOT-BEGIN"):
             _, ws, hs = line.split()
             w, h = int(ws), int(hs)
             fb = bytearray(w * h * 2)
-            print(f"frame {w}x{h}")
         elif line.startswith(b"SHOT-AREA") and fb is not None:
             _, x1, y1, x2, y2 = line.split()
             x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
@@ -130,10 +126,48 @@ def main():
                 dst = (y * w + x1) * 2
                 fb[dst:dst + sw * 2] = data[row * sw * 2:(row + 1) * sw * 2]
         elif line.startswith(b"SHOT-END") and fb is not None:
-            write_png(args.out, w, h, rgb565_to_rgb888(bytes(fb)))
-            print(f"wrote {args.out} ({w}x{h})")
+            return w, h, fb
+    return None
+
+
+def next_name(base):
+    n = 1
+    while True:
+        path = f"{base}_{n:02d}.png"
+        if not os.path.exists(path):
+            return path
+        n += 1
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("-p", "--port", default="/dev/ttyACM0")
+    ap.add_argument("-o", "--out", default="screenshot",
+                    help="base name; frames saved as <base>_NN.png")
+    ap.add_argument("-1", "--single", action="store_true",
+                    help="capture one frame and exit")
+    args = ap.parse_args()
+    base = args.out[:-4] if args.out.lower().endswith(".png") else args.out
+
+    port = Port(args.port)
+    while True:
+        if not args.single:
+            try:
+                cmd = input("Enter = capture, q+Enter = quit > ").strip().lower()
+            except EOFError:
+                cmd = "q"
+            if cmd == "q":
+                return
+        print("capturing…")
+        shot = grab(port)
+        if shot is None:
+            sys.exit("timeout — is the firmware running and the port right?")
+        w, h, fb = shot
+        path = next_name(base)
+        write_png(path, w, h, rgb565_to_rgb888(bytes(fb)))
+        print(f"wrote {path} ({w}x{h})")
+        if args.single:
             return
-    sys.exit("gave up waiting for SHOT-END")
 
 
 if __name__ == "__main__":

@@ -70,9 +70,9 @@ static char s_cStatL[24];
 static char s_cBig[12], s_cSec[8], s_cAmpm[8], s_cBottom[72];
 
 // Development diagnostic: live VBAT/IBAT from the nPM1300 on the clock face
-// and the ringing screen (1 Hz poll). For power-budget bench work — set to 0
-// for release builds.
-#define UI_DEV_IBAT 1
+// and the ringing screen (1 Hz poll). For power-budget bench work — set to 1
+// when measuring (the Battery menu screen always shows the same numbers).
+#define UI_DEV_IBAT 0
 #if UI_DEV_IBAT
 static lv_obj_t *s_ckIbat, *s_rgIbat;
 // 1 Hz cached PMIC reading shared by both labels; returns "3.87V -843mA".
