@@ -71,6 +71,17 @@ none stop daily use — the clock runs off the battery-backed RTC.
   itself — 0.5 s 2200 Hz beep (fixed moderate volume, independent of the
   alarm volume) + a sequential LED sweep — so a forgotten charger is
   noticed. Manual Shutdown stays silent on purpose.
+- **Charger-vs-shutdown races fixed**: the nPM1300 refuses ship-mode entry
+  with VBUS present — pmic_enter_ship_mode() used to spin forever (frozen
+  screen when a charger was plugged during the LOW BATTERY boot gate); it
+  now reboots into a normal charging boot after 300 ms. The boot gate also
+  polls VBUS during its 4 s message and continues booting if a charger
+  appears. Known remaining gap: a 10 s SHPHLD reset WITH USB attached
+  power-cycles the PMIC back to its 100 mA default and brownout-loops in
+  the bootloader window (amp noise) — bench workaround: unplug first; real
+  fix is the planned custom bootloader with an early ILIM write.
+- **Ringing screen**: ALARM 1/2 title lifted above the big digits' opaque
+  background (same z-order fix as the clock-face symbols).
 - **Per-alarm Lights switch** (alarm editor): off = sound-only alarm — no
   LED chase/blink while ringing. Stored in a free alarm-flag bit
   (inverted; old settings read back as on, no migration needed). Also

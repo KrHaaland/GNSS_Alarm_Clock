@@ -211,8 +211,15 @@ void pmic_enter_ship_mode() {
   if (!s_present)
     return;
   npm_write(NPM_TASKENTERSHIPMODE, 1);
-  for (;;) { // with VBUS absent the power vanishes "immediately" (datasheet)
+  // With VBUS absent the power vanishes "immediately" (datasheet). With VBUS
+  // PRESENT the nPM1300 refuses ship entry — spinning forever here hung the
+  // device with a frozen screen (seen live: charger plugged during the LOW
+  // BATTERY boot gate). Still executing after the grace period means a
+  // charger is holding VSYS up: reboot into a normal charging boot instead.
+  uint32_t t0 = millis();
+  while ((uint32_t)(millis() - t0) < 300) {
   }
+  NVIC_SystemReset();
 }
 
 bool pmic_present() { return s_present; }

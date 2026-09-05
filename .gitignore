@@ -44,3 +44,6 @@ sweep_*.wav
 
 # screenshot.py default output
 /screenshot*.png
+
+# python bytecode from tools/
+__pycache__/

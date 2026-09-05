@@ -39,7 +39,8 @@ void pmic_handle_irq();
 void pmic_task();
 // Cut the battery from VSYS (<500 nA). Wake: BUTTON1 (SHPHLD) or USB plug.
 // The RTC keeps time through this (its VBACKUP sits directly on VBAT).
-// Does not return when VBUS is absent.
+// Never returns: powers off — or, if a charger is present (the nPM1300
+// refuses ship entry with VBUS attached), reboots into a normal boot.
 void pmic_enter_ship_mode();
 bool pmic_present();  // true when an nPM1300 ACKed at boot
 uint16_t pmic_charge_current_ma();     // configured charge current

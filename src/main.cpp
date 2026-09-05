@@ -254,12 +254,29 @@ void setup() {
       lv_obj_center(l);
 #endif
       lv_obj_set_style_text_color(l, lv_color_white(), 0);
-      uint32_t t0 = millis();
+      uint32_t t0 = millis(), lastChk = 0;
+      bool charger = false;
       while (millis() - t0 < 4000) {
         lv_timer_handler();
         delay(5);
+        // A charger plugged mid-message rescues the boot ("a connected
+        // charger always allows boot" — and the PMIC would refuse ship
+        // entry with VBUS present anyway, which used to hang here).
+        if (millis() - lastChk >= 250) {
+          lastChk = millis();
+          PmicStatus st2;
+          if (pmic_read_status(st2) && st2.vbusPresent) {
+            charger = true;
+            break;
+          }
+        }
       }
-      pmic_enter_ship_mode(); // does not return (VBUS is absent here)
+      if (!charger)
+        pmic_enter_ship_mode(); // powers off — or reboots if VBUS won a race
+      lv_obj_delete(l); // charger appeared: clean the splash, boot normally
+#ifdef __SAMD51J20A__
+      lv_obj_delete(icon);
+#endif
     }
   }
 
