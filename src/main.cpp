@@ -324,6 +324,13 @@ void loop() {
     }
   }
 
+  // Debug screenshot: a '~' on the USB serial console streams the next frame
+  // (tools/screenshot.py). peek() so GNSS_SIM console lines pass through.
+  if (Serial.available() && Serial.peek() == '~') {
+    Serial.read();
+    display_screenshot_arm();
+  }
+
   // Inputs & housekeeping
   buttons_task();
   accel_task();

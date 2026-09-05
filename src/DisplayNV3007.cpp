@@ -119,9 +119,45 @@ static void set_window(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1) {
   wr_cmd(0x2C); // RAMWR
 }
 
+// Screenshot streaming: while armed, every flushed strip is also written to
+// USB serial as raw RGB565 little-endian (BEFORE the panel byte swap), framed
+// by text markers tools/screenshot.py reassembles into a PNG. Blocking CDC
+// writes are fine here — this is a bench/debug path.
+static bool s_shotArmed = false;
+
+void display_screenshot_arm() {
+  s_shotArmed = true;
+  lv_obj_invalidate(lv_screen_active()); // force a full-frame redraw
+  lv_obj_invalidate(lv_layer_top());     // msgboxes/overlays live up here
+}
+
+static void shot_stream(lv_display_t *disp, const lv_area_t *area,
+                        const uint8_t *px, uint32_t px_count) {
+  if (area->x1 == 0 && area->y1 == 0) {
+    Serial.print("SHOT-BEGIN ");
+    Serial.print(lv_display_get_horizontal_resolution(disp));
+    Serial.print(' ');
+    Serial.println(lv_display_get_vertical_resolution(disp));
+  }
+  Serial.print("SHOT-AREA ");
+  Serial.print(area->x1); Serial.print(' ');
+  Serial.print(area->y1); Serial.print(' ');
+  Serial.print(area->x2); Serial.print(' ');
+  Serial.println(area->y2);
+  Serial.write(px, px_count * 2);
+  Serial.flush();
+  if (lv_display_flush_is_last(disp)) {
+    Serial.println("\nSHOT-END");
+    s_shotArmed = false;
+  }
+}
+
 static void flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px) {
   const uint32_t px_count =
       (uint32_t)(area->x2 - area->x1 + 1) * (area->y2 - area->y1 + 1);
+
+  if (s_shotArmed)
+    shot_stream(disp, area, px, px_count); // before the swap: RGB565-LE
 
   // LVGL RGB565 is little-endian; the panel wants MSB first -> swap in place.
   lv_draw_sw_rgb565_swap(px, px_count);

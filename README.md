@@ -267,7 +267,10 @@ openocd -c "adapter driver cmsis-dap" -c "transport select swd" \
 > `atsame5 bootloader 0` before intentional bootloader updates, restore with
 > `atsame5 bootloader 16384`.
 
-`pio device monitor -b 115200` opens the USB-CDC console.
+`pio device monitor -b 115200` opens the USB-CDC console. Sending `~` on
+the console streams the next rendered frame as a screenshot —
+`python3 tools/screenshot.py` grabs it and writes a PNG (used for the
+documentation images; works on the live device, any screen).
 
 ### USB identity
 

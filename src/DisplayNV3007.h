@@ -17,3 +17,7 @@ void display_init();                  // HW init + LVGL display registration
 void display_set_contrast(uint8_t c); // 0..255 -> backlight brightness (PWM)
 void display_power(bool on);          // display on/off (+ backlight)
 void display_task();                  // periodic upkeep (none)
+// Debug: stream the next full frame as raw RGB565-LE over USB serial
+// (SHOT-BEGIN/AREA/END protocol; see tools/screenshot.py). Triggered from
+// the main loop by a '~' on the serial console.
+void display_screenshot_arm();
