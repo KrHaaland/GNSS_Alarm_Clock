@@ -103,6 +103,29 @@ def rgb565_to_rgb888(data):
 
 
 # --------------------------------------------------------------------- main --
+def find_port():
+    """The clock's CDC port: match its USB identity (pid.codes 1209:0001),
+    else first ACM/USB serial port. ACM numbering shifts with replug order,
+    so a hardcoded ttyACM0 default was a trap."""
+    try:
+        from serial.tools import list_ports
+
+        ports = list(list_ports.comports())
+        for p in ports:
+            if p.vid == 0x1209 and p.pid == 0x0001:
+                return p.device
+        for p in ports:
+            if "ACM" in p.device or "USB" in p.device:
+                return p.device
+    except ImportError:
+        import glob
+
+        g = sorted(glob.glob("/dev/ttyACM*") + glob.glob("/dev/ttyUSB*"))
+        if g:
+            return g[0]
+    return None
+
+
 def grab(port):
     """Trigger and collect one frame; returns (w, h, fb) or None on timeout."""
     port.write(b"~")
@@ -141,7 +164,8 @@ def next_name(base):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("-p", "--port", default="/dev/ttyACM0")
+    ap.add_argument("-p", "--port", default=None,
+                    help="serial port (default: autodetect the clock)")
     ap.add_argument("-o", "--out", default="screenshot",
                     help="base name; frames saved as <base>_NN.png")
     ap.add_argument("-1", "--single", action="store_true",
@@ -149,7 +173,11 @@ def main():
     args = ap.parse_args()
     base = args.out[:-4] if args.out.lower().endswith(".png") else args.out
 
-    port = Port(args.port)
+    portname = args.port or find_port()
+    if not portname:
+        sys.exit("no serial port found — is the clock plugged in? (-p to override)")
+    print(f"port: {portname}")
+    port = Port(portname)
     while True:
         if not args.single:
             try:
