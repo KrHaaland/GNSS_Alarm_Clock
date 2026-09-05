@@ -1610,6 +1610,11 @@ static void make_ringing() {
   lv_obj_align(s_rgHint, LV_ALIGN_BOTTOM_MID, 0, 0);
   lv_label_set_text_static(s_rgHint, "press = snooze    hold = stop");
 
+  // The big time label gets an opaque black background from blacken(), and
+  // the title is created before it -> lift it above (same z-order fix as
+  // the clock-face status symbols, ADR-0016 item 4).
+  lv_obj_move_foreground(s_rgTitle);
+
 #if UI_DEV_IBAT
   s_rgIbat = lv_label_create(scr);
   lv_obj_set_style_text_font(s_rgIbat, &lv_font_montserrat_16, 0);
