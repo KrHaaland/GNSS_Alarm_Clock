@@ -22,6 +22,18 @@ USB-C (J1, CC1/CC2 -> PMIC)          Li-ion (J7, 2-pin JST-PH)
                         FB R5 732k / R12 100k -> ~5.0 V, boosts from battery too)
 +3.3V: MCU, display (J4.7), L86 VCC+V_BCKP, RTC VDD, LIS3DH, QSPI flash,
        amp VDD (U1.13), I2C pullups (R6/R7 4.7k)
+
+Bulk caps: C21 on +5V, C18 on +3.3V (both 220 uF aluminum electrolytic,
+6.3x5.7 SMD, as designed). 2026-08: **C21 replaced with a 560 uF 6.3 V
+polymer** — the class-D + boost ripple current through the old elko's
+~0.5 ohm ESR wasted 50-125 mW as heat (polymer ~10-15 mOhm), measured as a
+slightly lower battery draw, and transient dips at load steps shrank from
+~250 mV (ESR x I) to ~10 mV, adding real margin against VSYSPOF resets
+near the IBATLIM wall. 5.0 V on a 6.3 V polymer = 79 % derating, within
+the <=80 % guideline (fine BEHIND the boost; a VBUS/VSYS position would
+need 10 V). C18 stays elko: 3.3 V on 6.3 V is a gentle life, and that
+rail's loads are quiet. v3: make both positions polymer from the start
+(BOM sheets price the alternatives).
 +5V:   all 34 LEDs (100R each, R20-R53) + TPA2016 PVCC
 ```
 
