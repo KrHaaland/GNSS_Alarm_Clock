@@ -26,7 +26,7 @@
 #include "Timezone.h"
 #include "TzTable.h"
 
-#define UI_FW_VERSION "v1.0.0"
+#define UI_FW_VERSION "v1.0.1"
 #define UI_MAX_WAVS 12
 #define UI_REFRESH_MS 250
 #define UI_SAVE_DEBOUNCE_MS 1500
