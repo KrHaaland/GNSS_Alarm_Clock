@@ -18,6 +18,8 @@ from the GNSS coordinates and saved to flash so it stays correct indoors, and
 alarms drive an LED light-show + a tune through a class-D amp. The UI is LVGL on
 a 428×142 color TFT driven by four buttons.
 
+![The clock at night, alarm light-show glowing](docs/img/clock_lights.jpg)
+
 > **Current state:** firmware is feature-complete and running on hardware —
 > display, GNSS time/timezone, alarms, audio, tunes-over-USB, settings, modes
 > (speedometer/altimeter/USB-gamepad) and the RV-3028 RTC (hand-fitted; it was
@@ -104,6 +106,23 @@ a 428×142 color TFT driven by four buttons.
   it with margin (ADR-0010/0014).
 - **Tune upload**: the QSPI flash appears as a **USB flash drive** (`TUNES`) —
   drag & drop `.wav` files (PCM, 8/16-bit, mono/stereo, 8–48 kHz).
+
+## Screenshots
+
+Grabbed from the live firmware over USB serial (`tools/screenshot.py`).
+
+| | |
+|---|---|
+| ![Clock face](docs/img/screen_clock.png) | ![Starry night](docs/img/screen_clock_stars.png) |
+| Clock face — battery gauge, charge bolt, alarm bell | Starry night (22:00–06:00) |
+| ![Waiting for time](docs/img/screen_waiting.png) | ![Sky view](docs/img/screen_skyview.png) |
+| First boot, no RTC/GNSS time yet | Sky view — GSV polar plot + SNR bars |
+| ![Menu](docs/img/screen_menu.png) | ![Menu 2](docs/img/screen_menu2.png) |
+| Main menu | …scrolled |
+| ![Speedometer](docs/img/screen_speedometer.png) | ![Altimeter](docs/img/screen_altimeter.png) |
+| Speedometer mode (GNSS) | Altimeter mode (GNSS) |
+| ![Game mode](docs/img/screen_gamemode.png) | ![The clock](docs/img/clock.jpg) |
+| Game mode — USB HID gamepad | The 3D-printed enclosure |
 
 ## Display (NV3007)
 
