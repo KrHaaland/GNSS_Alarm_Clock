@@ -1303,6 +1303,23 @@ static void refresh_sysinfo(bool force) {
   char sign = off < 0 ? '-' : '+';
   uint32_t ao = off < 0 ? (uint32_t)-off : (uint32_t)off;
 
+  // Why did the MCU last reset? Persistent in RSTC->RCAUSE until the next
+  // reset — turns "the USB connection bounced" into attributable data
+  // (BODVDD/BODCORE = brownout, SYST = NVIC_SystemReset e.g. the ship-mode
+  // charger fallback, POR = true power loss, EXT = reset pin/button).
+  const char *rstCause = "?";
+  {
+    uint8_t rc = RSTC->RCAUSE.reg;
+    rstCause = (rc & RSTC_RCAUSE_POR)     ? "POR"
+               : (rc & RSTC_RCAUSE_BODVDD) ? "BOD-VDD!"
+               : (rc & RSTC_RCAUSE_BODCORE) ? "BOD-CORE!"
+               : (rc & RSTC_RCAUSE_WDT)    ? "WDT"
+               : (rc & RSTC_RCAUSE_SYST)   ? "SYST(sw)"
+               : (rc & RSTC_RCAUSE_EXT)    ? "EXT"
+               : (rc & RSTC_RCAUSE_NVM)    ? "NVM"
+                                           : "BACKUP";
+  }
+
   char rtcSt[20];
   if (!rtc_present())
     strcpy(rtcSt, "MISSING");
@@ -1326,6 +1343,7 @@ static void refresh_sysinfo(bool force) {
            "Caps %s\n"
            "Snoozed %u this week, %lu total\n"
            "Amp %s\n"
+           "Reset cause: %s\n"
            "FW " UI_FW_VERSION " " __DATE__,
            gnss_has_fix() ? "yes" : "no", (unsigned)gnss_num_sats(), hdop,
            (unsigned long)gnss_chars_seen(), lat,
@@ -1334,7 +1352,7 @@ static void refresh_sysinfo(bool force) {
            clock_is_dst() ? " DST" : "", age, rtcSt,
            supercaps_ready() ? "ready" : "charging",
            (unsigned)alarm_snoozes_this_week(),
-           (unsigned long)settings().snoozeTotal, ampStatus);
+           (unsigned long)settings().snoozeTotal, ampStatus, rstCause);
   if (force || strcmp(s_cSys, b) != 0) {
     snprintf(s_cSys, sizeof(s_cSys), "%s", b);
     lv_label_set_text(s_sysLabel, b);

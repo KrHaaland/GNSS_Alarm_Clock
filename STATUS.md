@@ -35,6 +35,18 @@ none stop daily use — the clock runs off the battery-backed RTC.
 
 ## 2. Recent changes
 
+**The C21 polymer lesson (2026-09):** upgrading the 5 V bulk cap to a
+low-ESR polymer (560, then 330 uF) destabilized the TPS61023 boost —
+oscillation under load dipped VSYS and reset the MCU (USB disconnects
+during PC charging; fast charger + all LEDs too; charger thrashing
+CC<->trickle). The old 220 uF electrolytic's ESR zero (~1.4 kHz) was
+unknowingly the loop compensation the datasheet requires above 40 uF
+output capacitance. Elko restored; v3 may use polymer only together with
+a ~220 pF feedforward cap across R5. Diagnosis trail: charge-status
+decoding -> FW A/B test (exonerated firmware) -> no host over-current ->
+component A/B (both polymers fail, elko works). New permanent tool from
+the hunt: **Reset cause on System info** (RSTC->RCAUSE decoded).
+
 **Power budget, RTC backup & bootloader hardening (2026-08-03 → 08-09):**
 - **IBATLIM is the system's power wall**: the nPM1300 limits battery
   discharge to 1000 mA — exceeding it collapses VSYS below VSYSPOF and

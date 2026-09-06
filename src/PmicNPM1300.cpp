@@ -60,13 +60,19 @@
 #define NPM_DISCHG_LIMIT_MA 1000
 
 // Charge config: the setpoint follows the detected input budget —
-// 400 mA on a 500 mA source, 800 mA (charger max) on a 1.5/3 A source.
-// Both are gentle for the LG HG2 (rated 1.5 A standard charge): 0.13C and
-// 0.27C. The setpoint is a MAXIMUM: the nPM1300 prioritizes system load
-// in hardware and gives charging whatever remains of the budget, and the
-// 65/55 C die thermostat caps the thermal side (~1 W at 800 mA — watch
-// the Battery screen). Termination 4.10 V (user choice: the clock lives
-// on the charger; undercharging markedly extends cell life).
+// 400 mA on a 500 mA source, 800 mA (charger max) on a 1.5/3 A source
+// (0.2C / 0.4C on the 2000 mAh 505060 pack). The setpoint is a MAXIMUM:
+// the nPM1300 prioritizes system load in hardware and gives charging
+// whatever remains of the budget, and the 80/70 C die thermostat caps the
+// thermal side. Termination 4.10 V (user choice: the clock lives on the
+// charger; undercharging markedly extends cell life).
+// Debug note (2026-09): oscillating PC charging (CC<->trickle) + USB
+// bounces were chased through this setpoint (400->300 trial, no change),
+// an R12 reflow (no change) and an FW A/B test (no change) before the
+// real culprit fell: a low-ESR polymer swapped in for C21 destabilized
+// the 5 V boost (the elko's ESR zero was the TPS61023's >40 uF loop
+// compensation — see HARDWARE_V2). If those symptoms return, check the
+// hardware around the booster first; this setpoint was never the issue.
 #define NPM_CHARGE_MA_500BUDGET 400
 #define NPM_CHARGE_MA_HIPOWER 800
 

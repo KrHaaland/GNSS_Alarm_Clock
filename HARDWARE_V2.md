@@ -24,18 +24,20 @@ USB-C (J1, CC1/CC2 -> PMIC)          Li-ion (J7, 2-pin JST-PH)
        amp VDD (U1.13), I2C pullups (R6/R7 4.7k)
 
 Bulk caps: C21 on +5V, C18 on +3.3V (both 220 uF aluminum electrolytic,
-6.3x5.7 SMD, as designed). 2026-08: **C21 replaced with a 560 uF 6.3 V
-polymer** — the class-D + boost ripple current through the old elko's
-~0.5 ohm ESR wasted 50-125 mW as heat (polymer ~10-15 mOhm), measured as a
-slightly lower battery draw, and transient dips at load steps shrank from
-~250 mV (ESR x I) to ~10 mV, adding real margin against VSYSPOF resets
-near the IBATLIM wall. 5.0 V on a 6.3 V polymer = 79 % derating, within
-the <=80 % guideline (fine BEHIND the boost; a VBUS/VSYS position would
-need 10 V). C18 stays elko: 3.3 V on 6.3 V is a gentle life, and that
-rail's loads are quiet. v3: make both positions polymer from the start
-(BOM sheets price the alternatives).
-+5V:   all 34 LEDs (100R each, R20-R53) + TPA2016 PVCC
-```
+6.3x5.7 SMD). **C21 MUST stay an electrolytic (or get a feedforward cap
+first) — its ESR is load-bearing.** Bench saga 2026-09: swapping C21 to a
+560 uF (and later 330 uF) low-ESR polymer made the TPS61023 boost
+UNSTABLE under load — oscillation/current slams dipped VSYS, resetting
+the MCU (USB disconnects on PC charging; fast charger + all LEDs too);
+charging thrashed CC<->trickle. Both polymers failed, the old elko
+works: the discriminator is ESR, not capacitance. Datasheet-confirmed:
+above ~40 uF output capacitance the TPS61023 needs a zero at ~1 kHz
+(feedforward cap) — the elko's ESR zero (0.5 ohm x 220 uF ~ 1.4 kHz)
+WAS that compensation, by accident. The ~50-125 mW ESR ripple loss is
+the price of stability here. If polymer is ever wanted (v3): add
+C_FF ~ 220 pF across R5 (732k) for the 1 kHz feedforward zero per the
+datasheet, THEN low-ESR bulk is legal. C18 (3.3 V, buck output) is
+unaffected either way — the LM3671 has its own MLCC and quiet loads.
 
 - **The nPM1300's bucks are unused** (VOUT1/VOUT2/SW unconnected): the PMIC
   does charging, power path and USB-C only; regulation is external.
